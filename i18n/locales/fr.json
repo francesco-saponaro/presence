@@ -1,0 +1,14 @@
+{
+  "common": { "continue": "Continuer", "back": "Retour", "loading": "Chargement...", "error": "Une erreur s'est produite.", "retry": "Réessayer" },
+  "auth": { "login": "Se connecter", "signup": "Créer un compte", "forgotPassword": "Mot de passe oublié ?", "email": "E-mail", "password": "Mot de passe", "orContinueWith": "ou continuer avec", "apple": "Continuer avec Apple", "google": "Continuer avec Google", "tosAgreement": "En continuant, vous acceptez nos Conditions d'utilisation et notre Politique de confidentialité.", "resetSent": "Vérifiez votre e-mail pour un lien de réinitialisation." },
+  "onboarding": {
+    "step1": { "question": "Comment vous sentez-vous en envoyant des mèmes ?" },
+    "step4": { "title": "Définissez votre heure de blocage", "daily": "Quotidien", "fiveX": "5x par semaine", "weekends": "Week-ends" },
+    "step6": { "screenTime": "Temps d'écran / Accès d'utilisation", "notifications": "Notifications", "activityTracking": "Suivi d'activité", "photoLibrary": "Photothèque" },
+    "step7": { "title": "Commencez à vivre dans le présent.", "yearly": "Annuel", "restore": "Restaurer les achats", "terms": "Conditions d'utilisation", "privacy": "Politique de confidentialité" }
+  },
+  "home": { "blocked": "Vos apps sont bloquées.", "unblocked": "Vous êtes libre.", "upload": "Télécharger une preuve de connexion" },
+  "analytics": { "connections": "Connexions genuines", "streak": "Série en cours", "timeReclaimed": "Temps récupéré", "empty": "Aucune connexion pour l'instant. Commencez par contacter quelqu'un de réel." },
+  "profile": { "title": "Profil", "manageRoutine": "Gérer la routine", "blockedApps": "Apps bloquées", "language": "Langue", "feedback": "Retours et contact", "terms": "Conditions d'utilisation", "privacy": "Politique de confidentialité", "logout": "Se déconnecter", "deleteAccount": "Supprimer le compte", "manageSubscription": "Gérer l'abonnement" },
+  "shield": { "title": "Remplacez l'envoi de mèmes par une vraie connexion. Écrivez à quelqu'un, téléchargez la capture et déverrouillez vos apps.", "verifying": "Vérification de votre connexion...", "success": "Connexion vérifiée. Bienvenue.", "failure": "Nous n'avons pas pu vérifier cette connexion. Essayez une capture plus claire.", "bypass": "Ignorer la vérification", "bypassConfirm": "Ce contournement sera enregistré." }
+}

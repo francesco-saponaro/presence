@@ -1,0 +1,76 @@
+{
+  "common": {
+    "continue": "Continue",
+    "back": "Back",
+    "loading": "Loading...",
+    "error": "Something went wrong.",
+    "retry": "Try again"
+  },
+  "auth": {
+    "login": "Log in",
+    "signup": "Create account",
+    "forgotPassword": "Forgot password?",
+    "email": "Email",
+    "password": "Password",
+    "orContinueWith": "or continue with",
+    "apple": "Continue with Apple",
+    "google": "Continue with Google",
+    "tosAgreement": "By continuing, you agree to our Terms of Service and Privacy Policy.",
+    "resetSent": "Check your email for a reset link."
+  },
+  "onboarding": {
+    "step1": {
+      "question": "How does sending memes make you feel?"
+    },
+    "step4": {
+      "title": "Set your block time",
+      "daily": "Daily",
+      "fiveX": "5x a week",
+      "weekends": "Weekends"
+    },
+    "step6": {
+      "screenTime": "Screen Time / Usage Access",
+      "notifications": "Notifications",
+      "activityTracking": "Activity Tracking",
+      "photoLibrary": "Photo Library"
+    },
+    "step7": {
+      "title": "Start living presently.",
+      "yearly": "Yearly",
+      "restore": "Restore Purchases",
+      "terms": "Terms of Service",
+      "privacy": "Privacy Policy"
+    }
+  },
+  "home": {
+    "blocked": "Your apps are blocked.",
+    "unblocked": "You are free.",
+    "upload": "Upload connection proof"
+  },
+  "analytics": {
+    "connections": "Genuine Connections",
+    "streak": "Current Streak",
+    "timeReclaimed": "Time Reclaimed",
+    "empty": "No connections yet. Start by reaching out to someone real."
+  },
+  "profile": {
+    "title": "Profile",
+    "manageRoutine": "Manage Routine",
+    "blockedApps": "Blocked Apps",
+    "language": "Language",
+    "feedback": "Feedback & Contact",
+    "terms": "Terms of Service",
+    "privacy": "Privacy Policy",
+    "logout": "Log Out",
+    "deleteAccount": "Delete Account",
+    "manageSubscription": "Manage Subscription"
+  },
+  "shield": {
+    "title": "Replace meme sending with actual genuine connection. Text someone, upload the screenshot, and unlock your apps.",
+    "verifying": "Verifying your connection...",
+    "success": "Connection verified. Welcome back.",
+    "failure": "We couldn't verify this connection. Try a clearer screenshot.",
+    "bypass": "Skip verification",
+    "bypassConfirm": "This bypass will be logged."
+  }
+}

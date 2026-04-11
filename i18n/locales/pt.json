@@ -1,0 +1,14 @@
+{
+  "common": { "continue": "Continuar", "back": "Voltar", "loading": "Carregando...", "error": "Algo deu errado.", "retry": "Tentar novamente" },
+  "auth": { "login": "Entrar", "signup": "Criar conta", "forgotPassword": "Esqueceu a senha?", "email": "E-mail", "password": "Senha", "orContinueWith": "ou continuar com", "apple": "Continuar com Apple", "google": "Continuar com Google", "tosAgreement": "Ao continuar, você concorda com nossos Termos de Serviço e Política de Privacidade.", "resetSent": "Verifique seu e-mail para um link de redefinição." },
+  "onboarding": {
+    "step1": { "question": "Como você se sente ao enviar memes?" },
+    "step4": { "title": "Defina seu horário de bloqueio", "daily": "Diário", "fiveX": "5x por semana", "weekends": "Fins de semana" },
+    "step6": { "screenTime": "Tempo de tela / Acesso de uso", "notifications": "Notificações", "activityTracking": "Rastreamento de atividade", "photoLibrary": "Biblioteca de fotos" },
+    "step7": { "title": "Comece a viver no presente.", "yearly": "Anual", "restore": "Restaurar compras", "terms": "Termos de Serviço", "privacy": "Política de Privacidade" }
+  },
+  "home": { "blocked": "Seus apps estão bloqueados.", "unblocked": "Você está livre.", "upload": "Enviar prova de conexão" },
+  "analytics": { "connections": "Conexões genuínas", "streak": "Sequência atual", "timeReclaimed": "Tempo recuperado", "empty": "Nenhuma conexão ainda. Comece entrando em contato com alguém real." },
+  "profile": { "title": "Perfil", "manageRoutine": "Gerenciar rotina", "blockedApps": "Apps bloqueados", "language": "Idioma", "feedback": "Feedback e contato", "terms": "Termos de Serviço", "privacy": "Política de Privacidade", "logout": "Sair", "deleteAccount": "Excluir conta", "manageSubscription": "Gerenciar assinatura" },
+  "shield": { "title": "Substitua o envio de memes por uma conexão genuína. Escreva para alguém, envie o screenshot e desbloqueie seus apps.", "verifying": "Verificando sua conexão...", "success": "Conexão verificada. Bem-vindo de volta.", "failure": "Não conseguimos verificar esta conexão. Tente um screenshot mais claro.", "bypass": "Pular verificação", "bypassConfirm": "Este desvio será registrado." }
+}

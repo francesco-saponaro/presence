@@ -1,9 +1,9 @@
 import { View, Text } from "react-native";
 
-export default function HomeScreen() {
+export default function OnboardingScreen() {
   return (
     <View className="flex-1 bg-milk dark:bg-espresso items-center justify-center">
-      <Text className="text-text-dark dark:text-text-light">Home — TODO</Text>
+      <Text className="text-text-dark dark:text-text-light">PLACEHOLDER — TODO</Text>
     </View>
   );
 }

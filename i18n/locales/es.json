@@ -1,0 +1,31 @@
+{
+  "common": {
+    "continue": "Continuar",
+    "back": "Volver",
+    "loading": "Cargando...",
+    "error": "Algo salió mal.",
+    "retry": "Intentar de nuevo"
+  },
+  "auth": {
+    "login": "Iniciar sesión",
+    "signup": "Crear cuenta",
+    "forgotPassword": "¿Olvidaste tu contraseña?",
+    "email": "Correo electrónico",
+    "password": "Contraseña",
+    "orContinueWith": "o continuar con",
+    "apple": "Continuar con Apple",
+    "google": "Continuar con Google",
+    "tosAgreement": "Al continuar, aceptas nuestros Términos de servicio y Política de privacidad.",
+    "resetSent": "Revisa tu correo para un enlace de restablecimiento."
+  },
+  "onboarding": {
+    "step1": { "question": "¿Cómo te hace sentir enviar memes?" },
+    "step4": { "title": "Establece tu hora de bloqueo", "daily": "Diario", "fiveX": "5x por semana", "weekends": "Fines de semana" },
+    "step6": { "screenTime": "Tiempo de pantalla / Acceso de uso", "notifications": "Notificaciones", "activityTracking": "Seguimiento de actividad", "photoLibrary": "Biblioteca de fotos" },
+    "step7": { "title": "Empieza a vivir el presente.", "yearly": "Anual", "restore": "Restaurar compras", "terms": "Términos de servicio", "privacy": "Política de privacidad" }
+  },
+  "home": { "blocked": "Tus apps están bloqueadas.", "unblocked": "Estás libre.", "upload": "Sube prueba de conexión" },
+  "analytics": { "connections": "Conexiones genuinas", "streak": "Racha actual", "timeReclaimed": "Tiempo recuperado", "empty": "Sin conexiones aún. Empieza contactando a alguien real." },
+  "profile": { "title": "Perfil", "manageRoutine": "Gestionar rutina", "blockedApps": "Apps bloqueadas", "language": "Idioma", "feedback": "Comentarios y contacto", "terms": "Términos de servicio", "privacy": "Política de privacidad", "logout": "Cerrar sesión", "deleteAccount": "Eliminar cuenta", "manageSubscription": "Gestionar suscripción" },
+  "shield": { "title": "Reemplaza enviar memes con una conexión genuina. Escríbele a alguien, sube la captura y desbloquea tus apps.", "verifying": "Verificando tu conexión...", "success": "Conexión verificada. Bienvenido/a.", "failure": "No pudimos verificar esta conexión. Intenta con una captura más clara.", "bypass": "Omitir verificación", "bypassConfirm": "Esta omisión quedará registrada." }
+}

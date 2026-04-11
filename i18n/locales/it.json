@@ -1,0 +1,14 @@
+{
+  "common": { "continue": "Continua", "back": "Indietro", "loading": "Caricamento...", "error": "Qualcosa è andato storto.", "retry": "Riprova" },
+  "auth": { "login": "Accedi", "signup": "Crea account", "forgotPassword": "Password dimenticata?", "email": "E-mail", "password": "Password", "orContinueWith": "oppure continua con", "apple": "Continua con Apple", "google": "Continua con Google", "tosAgreement": "Continuando, accetti i nostri Termini di servizio e la Informativa sulla privacy.", "resetSent": "Controlla la tua e-mail per il link di reimpostazione." },
+  "onboarding": {
+    "step1": { "question": "Come ti fa sentire mandare meme?" },
+    "step4": { "title": "Imposta l'orario di blocco", "daily": "Quotidiano", "fiveX": "5x a settimana", "weekends": "Weekend" },
+    "step6": { "screenTime": "Tempo di utilizzo / Accesso utilizzo", "notifications": "Notifiche", "activityTracking": "Monitoraggio attività", "photoLibrary": "Libreria foto" },
+    "step7": { "title": "Inizia a vivere nel presente.", "yearly": "Annuale", "restore": "Ripristina acquisti", "terms": "Termini di servizio", "privacy": "Informativa sulla privacy" }
+  },
+  "home": { "blocked": "Le tue app sono bloccate.", "unblocked": "Sei libero.", "upload": "Carica prova di connessione" },
+  "analytics": { "connections": "Connessioni genuine", "streak": "Serie attuale", "timeReclaimed": "Tempo recuperato", "empty": "Nessuna connessione ancora. Inizia scrivendo a qualcuno di reale." },
+  "profile": { "title": "Profilo", "manageRoutine": "Gestisci routine", "blockedApps": "App bloccate", "language": "Lingua", "feedback": "Feedback e contatto", "terms": "Termini di servizio", "privacy": "Informativa sulla privacy", "logout": "Esci", "deleteAccount": "Elimina account", "manageSubscription": "Gestisci abbonamento" },
+  "shield": { "title": "Sostituisci l'invio di meme con una vera connessione. Scrivi a qualcuno, carica lo screenshot e sblocca le tue app.", "verifying": "Verifica connessione in corso...", "success": "Connessione verificata. Bentornato.", "failure": "Non siamo riusciti a verificare questa connessione. Prova con uno screenshot più chiaro.", "bypass": "Salta verifica", "bypassConfirm": "Questa deroga verrà registrata." }
+}
