@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { storage } from "@/lib/storage";
 
 interface ShieldState {
   isBlocked: boolean;
@@ -35,7 +35,7 @@ export const useShieldStore = create<ShieldState>()(
     }),
     {
       name: "presence-shield",
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => storage),
     }
   )
 );

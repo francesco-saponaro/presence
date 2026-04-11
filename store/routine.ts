@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { storage } from "@/lib/storage";
 
 interface RoutineState {
   blockTimeUtc: string | null; // stored as UTC ISO string
@@ -23,7 +23,7 @@ export const useRoutineStore = create<RoutineState>()(
     }),
     {
       name: "presence-routine",
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => storage),
     }
   )
 );
