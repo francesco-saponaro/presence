@@ -7,13 +7,13 @@
     "icon": "./assets/images/icon.png",
     "scheme": "presence",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.presence.app",
+      "bundleIdentifier": "com.franciccio.presence",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Presence needs access to your photos to verify your connection screenshot.",
-        "NSCameraUsageDescription": "Presence needs camera access to capture your connection proof."
+        "NSCameraUsageDescription": "Presence needs camera access to capture your connection proof.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -21,13 +21,14 @@
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#FAF7F2"
       },
-      "package": "com.presence.app",
+      "package": "com.franciccio.presence",
       "permissions": [
-        "PACKAGE_USAGE_STATS",
-        "SYSTEM_ALERT_WINDOW",
-        "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
-        "FOREGROUND_SERVICE",
-        "READ_EXTERNAL_STORAGE"
+        "android.permission.PACKAGE_USAGE_STATS",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
       ],
       "predictiveBackGestureEnabled": false
     },
@@ -60,6 +61,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "0790d724-e520-4239-987b-24ecc853d1f9"
+      }
     }
   }
 }
