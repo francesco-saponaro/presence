@@ -142,3 +142,27 @@ To ensure the app feels native, robust, and cheat-proof, you must implement the 
    - **iOS (Swipe Back):** You MUST set `gestureEnabled: false` in the Expo Router `<Stack.Screen>` options for critical screens to prevent users from simply swiping left-to-right to escape.
    - **Android (Hardware Back):** Implement React Native's `BackHandler` to intercept and disable the physical/system back button.
    - **Where to apply this:** 1. **The Hard Paywall:** Prevent backing out to access the app for free. 2. **Onboarding:** Prevent skipping crucial commitment steps. 3. **The Shield Screen:** When the Shield is active, the user must not be able to swipe or press back to dismiss it and return to the blocked app.
+
+## 10. Development Roadmap (Phased Approach)
+
+**CRITICAL INSTRUCTION FOR CLAUDE:** Do NOT attempt to build the entire app at once. We are building this strictly phase-by-phase. When I ask you to execute a phase, you must ONLY write code for that specific phase and stop. Do not jump ahead.
+
+- **[ ✅ DONE ] Phase 1: Foundation & Scaffolding** - Initialize Expo Router, basic folder structure, install dependencies, configure EAS development build.
+- **[ ✅ DONE ] Phase 2: State & Navigation** - Set up Zustand (with secure-store/async-storage platform logic), Supabase client initialization, and bare-bones Expo Router navigation flow.
+- **[ ⏳ NEXT ] Phase 3: UI & The "Cappuccino" Vibe** - Build the 7 Onboarding screens using NativeWind. Apply typography, colors, local `expo-image` assets, and the native bottom-sheet date picker.
+  - **Initialize i18n:** Wrap all text in translation functions.
+  - Do NOT build dashboard tabs yet.
+- **[ 🔒 LOCKED ] Phase 4: Supabase Auth & Database Schema** - Build the Login/Signup flow.
+  - Create the Supabase DB schema for users, routines, and connection stats. Hook up the auth state to Zustand.
+- **[ 🔒 LOCKED ] Phase 5: The Core Engine (Native Modules & Timezones) - _HIGHEST RISK_** - Write the Expo Config Plugins and native Swift/Kotlin bridges for Screen Time, UsageStats, and ML Kit/Vision OCR.
+  - Implement Timezone management (`date-fns`) for local vs UTC triggers.
+  - Wire the UI to the native blocker to test that the shield actually drops when an OCR image is verified.
+- **[ 🔒 LOCKED ] Phase 6: The Main Dashboard & Offline Handling**
+  - Build the Home, Analytics, and Profile tabs.
+  - Implement Graceful Offline Handling (cache OCR success locally and sync to Supabase when reconnected).
+- **[ 🔒 LOCKED ] Phase 7: Monetization, Notifications & Polish**
+  - Integrate RevenueCat paywall and deep linking (Auth).
+  - Implement AppState background listeners.
+  - Set up Expo local push notifications (Warm-up & Inactivity prompts).
+  - Configure Supabase Edge Functions for Resend transactional emails.
+  - Finalize the `expo-store-review` trigger on the 3rd successful connection.
