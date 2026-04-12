@@ -7,53 +7,130 @@
     "retry": "Try again"
   },
   "auth": {
-    "login": "Log in",
+    "headlineLogin": "Welcome back.",
+    "headlineSignup": "Create your account.",
+    "headlineForgot": "Reset your password.",
+    "headlineReset": "Set a new password.",
+    "subtitleForgot": "Enter your email and we'll send you a link.",
+    "subtitleSignup": "Join thousands who chose real over viral.",
+    "login": "Sign in",
     "signup": "Create account",
     "forgotPassword": "Forgot password?",
     "email": "Email",
     "password": "Password",
+    "confirmPassword": "Confirm password",
+    "newPassword": "New password",
+    "passwordMin": "Password must be at least 8 characters",
+    "passwordMatch": "Passwords do not match",
+    "invalidEmail": "Please enter a valid email address",
+    "tosRequired": "You must accept the terms to continue",
     "orContinueWith": "or continue with",
     "apple": "Continue with Apple",
     "google": "Continue with Google",
-    "tosAgreement": "By continuing, you agree to our Terms of Service and Privacy Policy.",
-    "resetSent": "Check your email for a reset link."
+    "tosAgreement": "I agree to the Terms of Service and Privacy Policy",
+    "noAccount": "Don't have an account?",
+    "hasAccount": "Already have an account?",
+    "signUpLink": "Sign up",
+    "signInLink": "Sign in",
+    "sendReset": "Send reset link",
+    "resetSent": "Check your email",
+    "resetSentBody": "We sent a reset link to {{email}}. It may take a minute.",
+    "backToLogin": "Back to sign in",
+    "updatePassword": "Update password",
+    "passwordUpdated": "Password updated. Please sign in.",
+    "signingIn": "Signing in...",
+    "creatingAccount": "Creating account...",
+    "sendingReset": "Sending...",
+    "updatingPassword": "Updating..."
   },
   "onboarding": {
     "step1": {
-      "question": "How does sending memes make you feel?"
+      "label": "Step 1 of 7",
+      "question": "How does sending memes make you feel?",
+      "opt1": "Disconnected",
+      "opt2": "Guilty",
+      "opt3": "Numb",
+      "opt4": "Nothing, honestly"
+    },
+    "step2": {
+      "label": "Step 2 of 7",
+      "headline": "You're not alone.",
+      "subhead": "The average person sends 47 meaningless messages a week.",
+      "body": "But every reaction you send is a minute you didn't spend on something real."
+    },
+    "step3": {
+      "label": "Step 3 of 7",
+      "headline": "What if your phone blocked the noise...",
+      "subhead": "...until you sent a real message to someone who matters?",
+      "body": "Presence replaces the habit with something that actually fills the void."
     },
     "step4": {
-      "title": "Set your block time",
+      "label": "Step 4 of 7",
+      "title": "Set your block time.",
+      "subtitle": "Tap the time to change it.",
+      "frequencyLabel": "How often?",
       "daily": "Daily",
       "fiveX": "5x a week",
-      "weekends": "Weekends"
+      "weekends": "Weekends",
+      "sheetTitle": "Choose a time",
+      "sheetConfirm": "Confirm"
+    },
+    "step5": {
+      "label": "Step 5 of 7",
+      "title": "Which apps distract you most?",
+      "subtitle": "Select the ones Presence will shield.",
+      "selectHint": "Select at least one to continue."
     },
     "step6": {
-      "screenTime": "Screen Time / Usage Access",
+      "label": "Step 6 of 7",
+      "title": "A few permissions needed.",
+      "subtitle": "Presence only uses these to run the shield.",
+      "screenTime": "Screen Time",
+      "screenTimeDesc": "Lets Presence know when you open a blocked app.",
       "notifications": "Notifications",
+      "notificationsDesc": "Receive gentle nudges before your block time starts.",
       "activityTracking": "Activity Tracking",
-      "photoLibrary": "Photo Library"
+      "activityTrackingDesc": "Helps Presence understand your usage patterns.",
+      "photoLibrary": "Photo Library",
+      "photoLibraryDesc": "Upload your proof of genuine connection."
     },
     "step7": {
+      "label": "Step 7 of 7",
       "title": "Start living presently.",
-      "yearly": "Yearly",
+      "social": "Join thousands who chose real over viral.",
+      "planLabel": "Full access. One price.",
+      "price": "$49.99",
+      "period": "/ year",
+      "trial": "7-day free trial included",
+      "cta": "Start Free Trial",
       "restore": "Restore Purchases",
       "terms": "Terms of Service",
-      "privacy": "Privacy Policy"
+      "privacy": "Privacy Policy",
+      "disclaimer": "Cancel anytime. Billed annually."
     }
   },
   "home": {
+    "tab": "Home",
     "blocked": "Your apps are blocked.",
+    "blockedSub": "Text someone real. Upload the proof. Unlock your world.",
     "unblocked": "You are free.",
-    "upload": "Upload connection proof"
+    "unblockedSub": "Shield activates {{time}}.",
+    "noRoutine": "Set up your routine to get started.",
+    "upload": "Upload Connection Proof",
+    "uploading": "Verifying...",
+    "blockTime": "Block time: {{time}}",
+    "connectionsLabel": "genuine connections",
+    "permissionNeeded": "Photo library access is required to upload proof."
   },
   "analytics": {
+    "tab": "Analytics",
     "connections": "Genuine Connections",
     "streak": "Current Streak",
     "timeReclaimed": "Time Reclaimed",
     "empty": "No connections yet. Start by reaching out to someone real."
   },
   "profile": {
+    "tab": "Profile",
     "title": "Profile",
     "manageRoutine": "Manage Routine",
     "blockedApps": "Blocked Apps",

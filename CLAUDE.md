@@ -149,10 +149,10 @@ To ensure the app feels native, robust, and cheat-proof, you must implement the 
 
 - **[ ✅ DONE ] Phase 1: Foundation & Scaffolding** - Initialize Expo Router, basic folder structure, install dependencies, configure EAS development build.
 - **[ ✅ DONE ] Phase 2: State & Navigation** - Set up Zustand (with secure-store/async-storage platform logic), Supabase client initialization, and bare-bones Expo Router navigation flow.
-- **[ ⏳ NEXT ] Phase 3: UI & The "Cappuccino" Vibe** - Build the 7 Onboarding screens using NativeWind. Apply typography, colors, local `expo-image` assets, and the native bottom-sheet date picker.
+- **[ ✅ DONE ] Phase 3: UI & The "Cappuccino" Vibe** - Build the 7 Onboarding screens using NativeWind. Apply typography, colors, local `expo-image` assets, and the native bottom-sheet date picker.
   - **Initialize i18n:** Wrap all text in translation functions.
   - Do NOT build dashboard tabs yet.
-- **[ 🔒 LOCKED ] Phase 4: Supabase Auth & Database Schema** - Build the Login/Signup flow.
+- **[ ⏳ NEXT ] Phase 4: Supabase Auth & Database Schema** - Build the Login/Signup flow.
   - Create the Supabase DB schema for users, routines, and connection stats. Hook up the auth state to Zustand.
 - **[ 🔒 LOCKED ] Phase 5: The Core Engine (Native Modules & Timezones) - _HIGHEST RISK_** - Write the Expo Config Plugins and native Swift/Kotlin bridges for Screen Time, UsageStats, and ML Kit/Vision OCR.
   - Implement Timezone management (`date-fns`) for local vs UTC triggers.

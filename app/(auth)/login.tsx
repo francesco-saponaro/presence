@@ -1,38 +1,183 @@
-import { View, Text, Button } from "react-native";
+import { useState } from "react";
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { useAuthStore } from "@/store/auth";
-import { useOnboardingStore } from "@/store/onboardingStore";
-import { useUserStore } from "@/store/userStore";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useTranslation } from "react-i18next";
+import Toast from "react-native-toast-message";
+import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
+import { loginSchema, type LoginForm } from "@/lib/validation";
+import { useOnboardingStore } from "@/store/onboardingStore";
+import { AuthInput } from "@/components/ui/AuthInput";
+import { PillButton } from "@/components/ui/PillButton";
 
 export default function LoginScreen() {
-  const setSession = useAuthStore((s) => s.setSession);
-  const setUser = useUserStore((s) => s.setUser);
+  const { t } = useTranslation();
+  const [isLoading, setIsLoading] = useState(false);
   const isOnboardingComplete = useOnboardingStore((s) => s.isOnboardingComplete);
 
-  /** DEV: simulate a successful login without real Supabase credentials */
-  function handleMockLogin() {
-    // Provide a minimal mock so the store has a truthy session
-    setSession({ access_token: "mock", user: { id: "mock-user", email: "dev@presence.app" } } as any);
-    setUser("mock-user", "dev@presence.app");
-    if (isOnboardingComplete) {
-      router.replace("/(tabs)");
-    } else {
-      router.replace("/(onboarding)/step-1-hook");
+  const { control, handleSubmit, formState: { errors } } = useForm<LoginForm>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: "", password: "" },
+  });
+
+  async function onSubmit({ email, password }: LoginForm) {
+    setIsLoading(true);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    setIsLoading(false);
+
+    if (error) {
+      Toast.show({ type: "error", text1: error.message });
+      return;
     }
+
+    // onAuthStateChange in _layout.tsx updates Zustand session.
+    // index.tsx will react and route to onboarding or tabs.
+    router.replace(isOnboardingComplete ? "/(tabs)" : "/(onboarding)/step-1-hook");
   }
 
-  async function handleSupabaseLogin() {
-    // Real implementation placeholder — wired up in Phase 3
+  function handleSocialPlaceholder() {
+    Toast.show({
+      type: "info",
+      text1: "Coming soon",
+      text2: "Social sign-in will be available in an upcoming update.",
+    });
   }
 
   return (
-    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 16 }}>
-      <Text style={{ fontSize: 24, fontWeight: "bold" }}>Login</Text>
-      <Text style={{ color: "grey" }}>[Email + Password fields — Phase 3]</Text>
-      <Button title="[DEV] Mock Sign In → Onboarding" onPress={handleMockLogin} />
-      <Button title="Go to Sign Up" onPress={() => router.push("/(auth)/signup")} />
-      <Button title="Forgot Password" onPress={() => router.push("/(auth)/forgot-password")} />
-    </View>
+    <SafeAreaView className="flex-1 bg-milk dark:bg-espresso">
+      <KeyboardAvoidingView
+        className="flex-1"
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1 }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View className="flex-1 px-6 pt-14 pb-8">
+            {/* App name */}
+            <Text className="font-serif-display text-lg text-brown-mid dark:text-tan text-center mb-10 tracking-widest uppercase">
+              Presence
+            </Text>
+
+            {/* Headline */}
+            <Text className="font-serif-display text-4xl text-text-dark dark:text-text-light mb-2">
+              {t("auth.headlineLogin")}
+            </Text>
+            <View className="h-px bg-greige dark:bg-brown-mid/50 mb-8 w-12" />
+
+            {/* Form */}
+            <Controller
+              control={control}
+              name="email"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <AuthInput
+                  label={t("auth.email")}
+                  value={value}
+                  onChangeText={onChange}
+                  onBlur={onBlur}
+                  error={errors.email ? t(errors.email.message as string) : undefined}
+                  keyboardType="email-address"
+                  autoComplete="email"
+                  placeholder="you@example.com"
+                />
+              )}
+            />
+
+            <Controller
+              control={control}
+              name="password"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <AuthInput
+                  label={t("auth.password")}
+                  value={value}
+                  onChangeText={onChange}
+                  onBlur={onBlur}
+                  error={errors.password ? t(errors.password.message as string) : undefined}
+                  isPassword
+                  autoComplete="password"
+                  placeholder="••••••••"
+                />
+              )}
+            />
+
+            {/* Forgot password */}
+            <TouchableOpacity
+              onPress={() => router.push("/(auth)/forgot-password")}
+              className="self-end -mt-2 mb-6"
+              activeOpacity={0.6}
+            >
+              <Text className="font-sans-medium text-sm text-brown-mid dark:text-greige underline">
+                {t("auth.forgotPassword")}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Sign in CTA */}
+            <PillButton
+              label={isLoading ? t("auth.signingIn") : t("auth.login")}
+              variant="primary"
+              disabled={isLoading}
+              onPress={handleSubmit(onSubmit)}
+            />
+
+            {/* Divider */}
+            <View className="flex-row items-center gap-3 my-6">
+              <View className="flex-1 h-px bg-greige dark:bg-brown-mid/40" />
+              <Text className="font-sans-body text-xs text-greige dark:text-brown-mid">
+                {t("auth.orContinueWith")}
+              </Text>
+              <View className="flex-1 h-px bg-greige dark:bg-brown-mid/40" />
+            </View>
+
+            {/* Social buttons */}
+            <View className="gap-3 mb-8">
+              <TouchableOpacity
+                onPress={handleSocialPlaceholder}
+                activeOpacity={0.7}
+                className="flex-row items-center justify-center gap-3 rounded-full border border-greige dark:border-brown-mid py-4 px-6"
+              >
+                <Ionicons name="logo-apple" size={20} color="#2A1800" />
+                <Text className="font-sans-medium text-base text-text-dark dark:text-text-light">
+                  {t("auth.apple")}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={handleSocialPlaceholder}
+                activeOpacity={0.7}
+                className="flex-row items-center justify-center gap-3 rounded-full border border-greige dark:border-brown-mid py-4 px-6"
+              >
+                <Ionicons name="logo-google" size={18} color="#2A1800" />
+                <Text className="font-sans-medium text-base text-text-dark dark:text-text-light">
+                  {t("auth.google")}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Sign up link */}
+            <View className="flex-row justify-center gap-1">
+              <Text className="font-sans-body text-sm text-brown-mid dark:text-greige">
+                {t("auth.noAccount")}
+              </Text>
+              <TouchableOpacity onPress={() => router.push("/(auth)/signup")} activeOpacity={0.6}>
+                <Text className="font-sans-bold text-sm text-brown-dark dark:text-tan underline">
+                  {t("auth.signUpLink")}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }

@@ -1,14 +1,27 @@
 {
   "common": { "continue": "Continuar", "back": "Voltar", "loading": "Carregando...", "error": "Algo deu errado.", "retry": "Tentar novamente" },
-  "auth": { "login": "Entrar", "signup": "Criar conta", "forgotPassword": "Esqueceu a senha?", "email": "E-mail", "password": "Senha", "orContinueWith": "ou continuar com", "apple": "Continuar com Apple", "google": "Continuar com Google", "tosAgreement": "Ao continuar, você concorda com nossos Termos de Serviço e Política de Privacidade.", "resetSent": "Verifique seu e-mail para um link de redefinição." },
-  "onboarding": {
-    "step1": { "question": "Como você se sente ao enviar memes?" },
-    "step4": { "title": "Defina seu horário de bloqueio", "daily": "Diário", "fiveX": "5x por semana", "weekends": "Fins de semana" },
-    "step6": { "screenTime": "Tempo de tela / Acesso de uso", "notifications": "Notificações", "activityTracking": "Rastreamento de atividade", "photoLibrary": "Biblioteca de fotos" },
-    "step7": { "title": "Comece a viver no presente.", "yearly": "Anual", "restore": "Restaurar compras", "terms": "Termos de Serviço", "privacy": "Política de Privacidade" }
+  "auth": {
+    "headlineLogin": "Bem-vindo de volta.", "headlineSignup": "Crie sua conta.", "headlineForgot": "Redefina sua senha.", "headlineReset": "Defina uma nova senha.",
+    "subtitleForgot": "Insira seu email e enviaremos um link.", "subtitleSignup": "Junte-se a milhares que escolheram o real.",
+    "login": "Entrar", "signup": "Criar conta", "forgotPassword": "Esqueceu a senha?", "email": "E-mail", "password": "Senha", "confirmPassword": "Confirmar senha", "newPassword": "Nova senha",
+    "passwordMin": "A senha deve ter pelo menos 8 caracteres", "passwordMatch": "As senhas não coincidem", "invalidEmail": "Por favor insira um e-mail válido", "tosRequired": "Você deve aceitar os termos para continuar",
+    "orContinueWith": "ou continuar com", "apple": "Continuar com Apple", "google": "Continuar com Google", "tosAgreement": "Concordo com os Termos de Serviço e a Política de Privacidade",
+    "noAccount": "Não tem uma conta?", "hasAccount": "Já tem uma conta?", "signUpLink": "Cadastre-se", "signInLink": "Entrar",
+    "sendReset": "Enviar link de redefinição", "resetSent": "Verifique seu e-mail", "resetSentBody": "Enviamos um link para {{email}}.",
+    "backToLogin": "Voltar ao login", "updatePassword": "Atualizar senha", "passwordUpdated": "Senha atualizada. Por favor faça login.",
+    "signingIn": "Entrando...", "creatingAccount": "Criando conta...", "sendingReset": "Enviando...", "updatingPassword": "Atualizando..."
   },
-  "home": { "blocked": "Seus apps estão bloqueados.", "unblocked": "Você está livre.", "upload": "Enviar prova de conexão" },
-  "analytics": { "connections": "Conexões genuínas", "streak": "Sequência atual", "timeReclaimed": "Tempo recuperado", "empty": "Nenhuma conexão ainda. Comece entrando em contato com alguém real." },
-  "profile": { "title": "Perfil", "manageRoutine": "Gerenciar rotina", "blockedApps": "Apps bloqueados", "language": "Idioma", "feedback": "Feedback e contato", "terms": "Termos de Serviço", "privacy": "Política de Privacidade", "logout": "Sair", "deleteAccount": "Excluir conta", "manageSubscription": "Gerenciar assinatura" },
+  "onboarding": {
+    "step1": { "label": "Passo 1 de 7", "question": "Como você se sente ao enviar memes?", "opt1": "Desconectado", "opt2": "Culpado", "opt3": "Insensível", "opt4": "Nada, honestamente" },
+    "step2": { "label": "Passo 2 de 7", "headline": "Você não está sozinho.", "subhead": "A pessoa média envia 47 mensagens sem sentido por semana.", "body": "Mas cada reação enviada é um minuto não dedicado a algo real." },
+    "step3": { "label": "Passo 3 de 7", "headline": "E se seu telefone bloqueasse o ruído...", "subhead": "...até você enviar uma mensagem real para alguém que importa?", "body": "Presence substitui o hábito por algo que realmente preenche o vazio." },
+    "step4": { "label": "Passo 4 de 7", "title": "Defina seu horário de bloqueio.", "subtitle": "Toque no horário para alterá-lo.", "frequencyLabel": "Com que frequência?", "daily": "Diário", "fiveX": "5x por semana", "weekends": "Fins de semana", "sheetTitle": "Escolha um horário", "sheetConfirm": "Confirmar" },
+    "step5": { "label": "Passo 5 de 7", "title": "Quais apps te distraem mais?", "subtitle": "Selecione os que Presence irá bloquear.", "selectHint": "Selecione pelo menos um para continuar." },
+    "step6": { "label": "Passo 6 de 7", "title": "Algumas permissões necessárias.", "subtitle": "Presence só as usa para ativar o escudo.", "screenTime": "Tempo de tela", "screenTimeDesc": "Permite que Presence saiba quando você abre um app bloqueado.", "notifications": "Notificações", "notificationsDesc": "Receba lembretes gentis antes do bloqueio.", "activityTracking": "Rastreamento de atividade", "activityTrackingDesc": "Ajuda Presence a entender seus padrões de uso.", "photoLibrary": "Biblioteca de fotos", "photoLibraryDesc": "Envie sua prova de conexão genuína." },
+    "step7": { "label": "Passo 7 de 7", "title": "Comece a viver no presente.", "social": "Junte-se a milhares que escolheram o real.", "planLabel": "Acesso completo. Um preço.", "price": "R$ 249,90", "period": "/ ano", "trial": "7 dias de teste gratuito incluídos", "cta": "Começar teste gratuito", "restore": "Restaurar compras", "terms": "Termos de Serviço", "privacy": "Política de Privacidade", "disclaimer": "Cancele quando quiser. Cobrança anual." }
+  },
+  "home": { "tab": "Início", "blocked": "Seus apps estão bloqueados.", "blockedSub": "Escreva para alguém real. Envie a prova. Desbloqueie seu mundo.", "unblocked": "Você está livre.", "unblockedSub": "O escudo ativa {{time}}.", "noRoutine": "Configure sua rotina para começar.", "upload": "Enviar prova de conexão", "uploading": "Verificando...", "blockTime": "Hora de bloqueio: {{time}}", "connectionsLabel": "conexões genuínas", "permissionNeeded": "É necessário acesso à galeria para enviar a prova." },
+  "analytics": { "tab": "Análises", "connections": "Conexões genuínas", "streak": "Sequência atual", "timeReclaimed": "Tempo recuperado", "empty": "Nenhuma conexão ainda. Comece entrando em contato com alguém real." },
+  "profile": { "tab": "Perfil", "title": "Perfil", "manageRoutine": "Gerenciar rotina", "blockedApps": "Apps bloqueados", "language": "Idioma", "feedback": "Feedback e contato", "terms": "Termos de Serviço", "privacy": "Política de Privacidade", "logout": "Sair", "deleteAccount": "Excluir conta", "manageSubscription": "Gerenciar assinatura" },
   "shield": { "title": "Substitua o envio de memes por uma conexão genuína. Escreva para alguém, envie o screenshot e desbloqueie seus apps.", "verifying": "Verificando sua conexão...", "success": "Conexão verificada. Bem-vindo de volta.", "failure": "Não conseguimos verificar esta conexão. Tente um screenshot mais claro.", "bypass": "Pular verificação", "bypassConfirm": "Este desvio será registrado." }
 }

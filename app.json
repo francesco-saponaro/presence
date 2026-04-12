@@ -57,7 +57,9 @@
         {
           "photosPermission": "Presence needs your photo library to verify your connection screenshot."
         }
-      ]
+      ],
+      "./plugins/withScreenTime.js",
+      "./plugins/withAndroidBlocker.js"
     ],
     "experiments": {
       "typedRoutes": true
