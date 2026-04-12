@@ -67,7 +67,21 @@ function withBlockerService(config) {
 function withMLKitGradle(config) {
   return withAppBuildGradle(config, (cfg) => {
     const ml = "com.google.android.gms:play-services-mlkit-text-recognition:19.0.1";
-    if (!cfg.modResults.contents.includes(ml)) {
+    if (cfg.modResults.contents.includes(ml)) return cfg;
+
+    // Target the dependencies block that appears INSIDE the android { } block.
+    // Using a two-pass approach: find the android { } block, then append the
+    // implementation line just before its closing brace so we never touch the
+    // buildscript dependencies block at the top of the file.
+    const androidBlockMatch = cfg.modResults.contents.match(/android\s*\{[\s\S]*?\ndependencies\s*\{/);
+    if (androidBlockMatch) {
+      // Insert right after the matched `dependencies {`
+      cfg.modResults.contents = cfg.modResults.contents.replace(
+        /(\nandroid\s*\{[\s\S]*?\ndependencies\s*\{)/,
+        `$1\n    implementation '${ml}'`
+      );
+    } else {
+      // Fallback: append to first dependencies block (standard single-block gradle)
       cfg.modResults.contents = cfg.modResults.contents.replace(
         /dependencies\s*\{/,
         `dependencies {\n    implementation '${ml}'`

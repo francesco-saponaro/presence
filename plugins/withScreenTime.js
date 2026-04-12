@@ -4,8 +4,13 @@
  * Expo Config Plugin — iOS
  * 1. Adds the com.apple.developer.family-controls entitlement.
  * 2. Adds NSFamilyControlsUsageDescription to Info.plist.
- * 3. Copies the Swift + ObjC bridge files into the generated Xcode project.
- * 4. Adds the copied source files to the Xcode build target.
+ * 3. Copies the Swift + ObjC bridge files into the generated Xcode project directory.
+ * 4. Adds the copied source files to the Xcode build target's Sources phase.
+ *
+ * NOTE: xcodeProject.pbxFileByName() does NOT exist in the `xcode` npm package.
+ *       Use findPBXGroupKey() + addSourceFile() instead. addSourceFile() is a no-op
+ *       (returns false) when the file reference already exists, so it is safe to
+ *       call on every prebuild without creating duplicates.
  */
 
 const {
@@ -24,9 +29,7 @@ const NATIVE_FILES = [
   "PresenceOCR.swift",
 ];
 
-/**
- * Step 1 – FamilyControls entitlement
- */
+/** Step 1 – FamilyControls entitlement */
 function withFamilyControlsEntitlement(config) {
   return withEntitlementsPlist(config, (cfg) => {
     cfg.modResults["com.apple.developer.family-controls"] = true;
@@ -34,9 +37,7 @@ function withFamilyControlsEntitlement(config) {
   });
 }
 
-/**
- * Step 2 – Info.plist usage description
- */
+/** Step 2 – Info.plist usage description */
 function withFamilyControlsInfoPlist(config) {
   return withInfoPlist(config, (cfg) => {
     cfg.modResults.NSFamilyControlsUsageDescription =
@@ -45,9 +46,7 @@ function withFamilyControlsInfoPlist(config) {
   });
 }
 
-/**
- * Step 3 – Copy Swift/ObjC files into ios/<ProjectName>/
- */
+/** Step 3 – Copy Swift/ObjC source files into ios/<ProjectName>/ */
 function withCopyNativeFiles(config) {
   return withDangerousMod(config, [
     "ios",
@@ -69,24 +68,27 @@ function withCopyNativeFiles(config) {
   ]);
 }
 
-/**
- * Step 4 – Add copied files to the Xcode project build phase
- */
+/** Step 4 – Register the copied files in the Xcode project Sources build phase */
 function withAddFilesToXcode(config) {
   return withXcodeProject(config, (cfg) => {
     const xcodeProject = cfg.modResults;
     const projectName = cfg.modRequest.projectName;
 
-    for (const file of NATIVE_FILES) {
-      const filePath = `${projectName}/${file}`;
-      if (!xcodeProject.pbxFileByName(file)) {
-        xcodeProject.addSourceFile(
-          filePath,
-          {},
-          xcodeProject.getFirstTarget().uuid
-        );
-      }
+    // Locate the main app PBX group (the one named after the project).
+    const groupKey = xcodeProject.findPBXGroupKey({ name: projectName });
+    if (!groupKey) {
+      console.warn(
+        `[withScreenTime] Could not find PBX group "${projectName}" — skipping source file registration.`
+      );
+      return cfg;
     }
+
+    for (const file of NATIVE_FILES) {
+      // addSourceFile returns false (not throws) if the file reference already
+      // exists in the project, making this call idempotent across prebuilds.
+      xcodeProject.addSourceFile(file, {}, groupKey);
+    }
+
     return cfg;
   });
 }

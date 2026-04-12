@@ -1,11 +1,13 @@
 // PresenceOCR.swift
 // On-device text recognition using Apple Vision (VNRecognizeTextRequest).
-// No data ever leaves the device.
+// No image data ever leaves the device.
+//
+// Do NOT add `import React` — RCTPromiseResolveBlock / RCTPromiseRejectBlock
+// are bridged to Swift via the project's ObjC bridging header automatically.
 
 import Foundation
 import UIKit
 import Vision
-import React
 
 @objc(PresenceOCR)
 class PresenceOCR: NSObject {
@@ -16,7 +18,7 @@ class PresenceOCR: NSObject {
     resolver resolve: @escaping RCTPromiseResolveBlock,
     rejecter reject: @escaping RCTPromiseRejectBlock
   ) {
-    // Normalise the path – expo-image-picker may return a file:// URI.
+    // Normalise path — expo-image-picker can return a file:// URI.
     let cleanPath = imagePath.hasPrefix("file://")
       ? String(imagePath.dropFirst(7))
       : imagePath
@@ -47,7 +49,7 @@ class PresenceOCR: NSObject {
 
     request.recognitionLevel = .accurate
     request.usesLanguageCorrection = true
-    // Recognise text in the most common message-app languages
+    // Cover all five supported locales
     request.recognitionLanguages = ["en-US", "es-ES", "fr-FR", "it-IT", "pt-BR"]
 
     DispatchQueue.global(qos: .userInitiated).async {

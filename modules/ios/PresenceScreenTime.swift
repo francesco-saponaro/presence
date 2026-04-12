@@ -1,20 +1,21 @@
 // PresenceScreenTime.swift
 // Bridges Apple FamilyControls + ManagedSettings to React Native.
 //
-// Requires iOS 16+ and the com.apple.developer.family-controls entitlement.
-// The plugin withScreenTime.js injects that entitlement automatically.
+// Requires the com.apple.developer.family-controls entitlement
+// (injected automatically by plugins/withScreenTime.js).
+//
+// Do NOT add `import React` here — React Native ObjC headers are provided
+// to Swift via the project's auto-generated bridging header.  Adding
+// `import React` causes "No such module 'React'" in classic-bridge builds.
 
 import Foundation
-import React
-
-#if canImport(FamilyControls)
 import FamilyControls
 import ManagedSettings
 
-@available(iOS 16.0, *)
 @objc(PresenceScreenTime)
 class PresenceScreenTime: NSObject {
 
+  // ManagedSettingsStore is available iOS 15+, same as our deployment target.
   private let store = ManagedSettingsStore()
 
   // MARK: – Authorization
@@ -24,6 +25,11 @@ class PresenceScreenTime: NSObject {
     _ resolve: @escaping RCTPromiseResolveBlock,
     rejecter reject: @escaping RCTPromiseRejectBlock
   ) {
+    // AuthorizationCenter.requestAuthorization(for: .individual) requires iOS 16.
+    guard #available(iOS 16.0, *) else {
+      reject("UNAVAILABLE", "Screen Time controls require iOS 16 or later.", nil)
+      return
+    }
     Task {
       do {
         try await AuthorizationCenter.shared.requestAuthorization(for: .individual)
@@ -39,22 +45,25 @@ class PresenceScreenTime: NSObject {
     _ resolve: @escaping RCTPromiseResolveBlock,
     rejecter reject: @escaping RCTPromiseRejectBlock
   ) {
+    guard #available(iOS 16.0, *) else {
+      resolve("notDetermined")
+      return
+    }
     let status: String
     switch AuthorizationCenter.shared.authorizationStatus {
-    case .approved:    status = "approved"
-    case .denied:      status = "denied"
+    case .approved:      status = "approved"
+    case .denied:        status = "denied"
     case .notDetermined: status = "notDetermined"
-    @unknown default:  status = "unknown"
+    @unknown default:    status = "unknown"
     }
     resolve(status)
   }
 
   // MARK: – Shield management
   //
-  // NOTE: FamilyControls' ManagedSettings works with opaque ApplicationTokens
-  // (obtained via FamilyActivityPicker), not raw bundle IDs. For the MVP, we
-  // shield ALL application categories when asked and clear them on success.
-  // Phase 6 (App Picker integration) will pass real FamilyActivitySelection data.
+  // ManagedSettingsStore is available iOS 15+, so no availability guard needed.
+  // For Phase 6 we will wire up real FamilyActivitySelection / ApplicationTokens.
+  // For now we shield ALL categories when the block window is active.
 
   @objc
   func applyShield(
@@ -76,28 +85,5 @@ class PresenceScreenTime: NSObject {
     resolve(nil)
   }
 
-  // React Native bridge utilities
   @objc static func requiresMainQueueSetup() -> Bool { false }
 }
-
-#else
-
-// Stub for simulator / macOS builds that don't have FamilyControls.
-@objc(PresenceScreenTime)
-class PresenceScreenTime: NSObject {
-  @objc func requestAuthorization(_ resolve: RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) {
-    resolve(nil)
-  }
-  @objc func getAuthorizationStatus(_ resolve: RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) {
-    resolve("notDetermined")
-  }
-  @objc func applyShield(_ bundleIds: NSArray, resolver resolve: RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) {
-    resolve(nil)
-  }
-  @objc func clearShield(_ resolve: RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) {
-    resolve(nil)
-  }
-  @objc static func requiresMainQueueSetup() -> Bool { false }
-}
-
-#endif
