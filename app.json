@@ -14,6 +14,9 @@
         "NSPhotoLibraryUsageDescription": "Presence needs access to your photos to verify your connection screenshot.",
         "NSCameraUsageDescription": "Presence needs camera access to capture your connection proof.",
         "ITSAppUsesNonExemptEncryption": false
+      },
+      "entitlements": {
+        "com.apple.developer.family-controls": true
       }
     },
     "android": {

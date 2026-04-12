@@ -152,9 +152,9 @@ To ensure the app feels native, robust, and cheat-proof, you must implement the 
 - **[ ✅ DONE ] Phase 3: UI & The "Cappuccino" Vibe** - Build the 7 Onboarding screens using NativeWind. Apply typography, colors, local `expo-image` assets, and the native bottom-sheet date picker.
   - **Initialize i18n:** Wrap all text in translation functions.
   - Do NOT build dashboard tabs yet.
-- **[ ⏳ NEXT ] Phase 4: Supabase Auth & Database Schema** - Build the Login/Signup flow.
+- **[ ✅ DONE ] Phase 4: Supabase Auth & Database Schema** - Build the Login/Signup flow.
   - Create the Supabase DB schema for users, routines, and connection stats. Hook up the auth state to Zustand.
-- **[ 🔒 LOCKED ] Phase 5: The Core Engine (Native Modules & Timezones) - _HIGHEST RISK_** - Write the Expo Config Plugins and native Swift/Kotlin bridges for Screen Time, UsageStats, and ML Kit/Vision OCR.
+- **[ ⏳ NEXT ] Phase 5: The Core Engine (Native Modules & Timezones) - _HIGHEST RISK_** - Write the Expo Config Plugins and native Swift/Kotlin bridges for Screen Time, UsageStats, and ML Kit/Vision OCR.
   - Implement Timezone management (`date-fns`) for local vs UTC triggers.
   - Wire the UI to the native blocker to test that the shield actually drops when an OCR image is verified.
 - **[ 🔒 LOCKED ] Phase 6: The Main Dashboard & Offline Handling**
