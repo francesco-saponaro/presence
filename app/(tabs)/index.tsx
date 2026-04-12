@@ -53,7 +53,7 @@ export default function HomeScreen() {
   async function handleUploadProof() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Toast.show({ type: "info", text1: t("shield.permissionNeeded") });
+      Toast.show({ type: "info", text1: t("home.permissionNeeded") });
       return;
     }
 

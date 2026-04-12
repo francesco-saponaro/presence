@@ -10,9 +10,7 @@ export const signupSchema = z
     email: z.string().email("auth.invalidEmail"),
     password: z.string().min(8, "auth.passwordMin"),
     confirmPassword: z.string().min(8, "auth.passwordMin"),
-    tosAccepted: z.literal(true, {
-      errorMap: () => ({ message: "auth.tosRequired" }),
-    }),
+    tosAccepted: z.literal(true, { error: "auth.tosRequired" }),
   })
   .refine((d) => d.password === d.confirmPassword, {
     message: "auth.passwordMatch",

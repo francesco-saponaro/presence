@@ -18,6 +18,7 @@
 - **Forms & Inputs:** `@react-native-community/datetimepicker` (For native time selection).
 - **Images:** `expo-image` (Required for all image rendering).
 - **Alerts/Feedback:** `react-native-toast-message` (For all success, error, and info toasts).
+- **Notifications:** `expo-notifications` (local push only — no Expo push server).
 - **Native Modules (Cross-Platform):** Custom Swift (iOS) and Kotlin (Android) code injected via Expo Config Plugins.
   - **iOS:** Apple `FamilyControls`, `ManagedSettings`, `DeviceActivity`, and Apple `Vision` framework (OCR).
   - **Android:** `UsageStatsManager` (App detection), `SYSTEM_ALERT_WINDOW` (Overlay Shield), and Google `ML Kit Vision` (OCR).
@@ -30,15 +31,18 @@
 ## 3. Build & Dev Commands
 
 - Install: `npm install`
+- Type-check: `npx tsc --noEmit`
 - Start Metro: `npx expo start`
-- Build Environment (CRITICAL): Development is happening on Windows. DO NOT attempt to run local iOS builds (`npx expo run:ios`) or local prebuilds. All iOS native development builds (required for testing Screen Time/OCR on a physical device) will be compiled and uploaded manually by the user via Expo Cloud (EAS).
+- **Build Environment (CRITICAL):** Development is happening on **Windows**. DO NOT attempt to run local iOS builds (`npx expo run:ios`) or local prebuilds for iOS. All iOS native development builds will be compiled via EAS Cloud (`eas build --platform ios --profile development`). Android can be prebuilt locally: `npx expo prebuild --platform android --clean`.
 
 ## 4. Strict Development Rules & Constraints
 
-1. **Localization is Mandatory:** DO NOT hardcode any English text directly into React components. Every user-facing string must be wrapped in the `t()` function from `react-i18next`.
+1. **Localization is Mandatory:** DO NOT hardcode any English text directly into React components. Every user-facing string must be wrapped in the `t()` function from `react-i18next`. All 5 locale files (en, es, fr, it, pt) in `i18n/locales/` must be updated simultaneously.
 2. **Local Assets & Expo Image:** DO NOT use external URLs, Unsplash links, or standard RN `<Image>`. You MUST use `expo-image` and load the specific provided local files (e.g., `source={require('../assets/images/onboarding-1.png')}`). Ensure `contentFit="contain"` is used so backgrounds blend perfectly into the `#FAF7F2` or `#261B10` app backgrounds.
 3. **No Confetti/Cheap UI:** Use heavy `@gorhom/bottom-sheet`, smooth premium transitions (`react-native-reanimated`), and glassmorphism (`expo-glass-effect`).
 4. **Native Swift Bridges:** Provide the exact Swift code for bridging FamilyControls and Vision (OCR), along with the necessary Expo Config Plugin (e.g., `withScreenTime.js`) to inject entitlements into `Info.plist` and `.entitlements` during the prebuild phase.
+5. **Classic Bridge (NOT New Architecture):** The project uses the classic React Native bridge. `newArchEnabled` must NOT be in app.json. The `RCT_EXTERN_MODULE` / `RCT_EXTERN_METHOD` ObjC bridge pattern is used for Swift modules. Swift files must NOT `import React` — types come through the ObjC bridging header automatically.
+6. **Zod v4 API:** This project uses Zod v4. The `errorMap` option is renamed to `error`. Use `z.literal(true, { error: "..." })` not `{ errorMap: ... }`.
 
 ## 5. UI/UX & Brand Guidelines (The "Cappuccino" Palette)
 
@@ -50,7 +54,7 @@
 - **Components:** Thick, chunky, pill-shaped buttons (fully rounded). Soft, diffuse, brown-tinted shadows (e.g., `rgba(66, 39, 1, 0.08)` in light mode). Thin borders (`1px solid #C6C0B9`) for cards.
 - **Haptics:** Tie `expo-haptics` to major interactions (especially "Success" haptic on verification).
 - **Toasts:** Use `react-native-toast-message` for all system feedback. Design custom toast layouts to match the Cappuccino palette (e.g., Tan background for success, Dark Brown for errors) instead of using the default generic toast styling.
-- **Android Edge-to-Edge & Safe Areas (CRITICAL):** - The app must be fully edge-to-edge. Use `expo-navigation-bar` to make the Android system navigation bar transparent so the background color extends to the very bottom of the screen.
+- **Android Edge-to-Edge & Safe Areas (CRITICAL):** The app must be fully edge-to-edge. Use `expo-navigation-bar` to make the Android system navigation bar transparent so the background color extends to the very bottom of the screen.
   - You MUST use `useSafeAreaInsets` from `react-native-safe-area-context`. Any absolute-positioned bottom buttons or Bottom Sheets must have a padding/margin bottom of `insets.bottom + 20` to ensure they are never covered by the Android system navigation bar.
 
 ## 6. Core Features & App Flow
@@ -74,7 +78,7 @@
 6. **Permissions Hell (Handled Gracefully):** - **UI:** Four prominent toggle buttons requesting: 1) Screen Time / Usage Access, 2) Notifications, 3) Activity Tracking, 4) Photo Library.
    - **Cross-Platform Logic (What happens when toggled):**
      - **iOS:** Routes to Apple's native prompt for `FamilyControls`, push notifications, and photo gallery access.
-     - **Android(CRITICAL):** Routes the user to the deep OS settings to grant `PACKAGE_USAGE_STATS` (Usage Access) and `SYSTEM_ALERT_WINDOW` (Draw Over Other Apps), alongside standard notification/storage prompts. **You MUST also explicitly prompt the user to disable Battery Optimization (`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`)**, otherwise Android will kill the background blocker service. **CRITICAL UI:** Because Android's permission screens are confusing, use clean Lottie animations or local GIFs above the toggles to visually show Android users exactly which OS buttons they need to press.
+     - **Android (CRITICAL):** Routes the user to the deep OS settings to grant `PACKAGE_USAGE_STATS` (Usage Access) and `SYSTEM_ALERT_WINDOW` (Draw Over Other Apps), alongside standard notification/storage prompts. **You MUST also explicitly prompt the user to disable Battery Optimization (`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`)**, otherwise Android will kill the background blocker service. **CRITICAL UI:** Because Android's permission screens are confusing, use clean Lottie animations or local GIFs above the toggles to visually show Android users exactly which OS buttons they need to press.
 7. **The Hard Paywall:** "Before vs. After" graph. Yearly plan via RevenueCat. Must include "Restore Purchases", TOS, Privacy Policy links. Uses Onboarding Image 4.
 
 ### C. Main Dashboard (Bottom Tabs)
@@ -101,13 +105,17 @@
 
 ## 7. Backend & Services Integration
 
-- **Supabase:** Schema must track user profiles, connection proof successes (stats), and selected routines.
-- **RevenueCat:** Handle paywall offerings, execute purchases, check entitlements.
-- **Edge Functions:** Secure webhook handler to receive RevenueCat events and sync active subscription status to the Supabase user profile.
-- **Resend:** Implement Edge Functions to trigger a Welcome Email upon successful payment, and handle routing for the in-app Feedback/Contact form.
-- **Expo Notifications:** Implement a highly intentional notification strategy:
-  1. **The Warm-up:** Schedule a local push 15 minutes _before_ their target block time: "Your scroll shield goes up in 15 minutes. Who haven't you spoken to in a while?"
-  2. **The Inactivity Prompt:** If the user hasn't successfully unlocked the shield in 48 hours: "It's been a few days. Take 2 minutes to ask a friend how they're doing."
+- **Supabase:** Schema must track user profiles, connection proof successes (stats), and selected routines. See `supabase/schema.sql` for the full schema. Edge functions live in `supabase/functions/`.
+- **RevenueCat:** Handle paywall offerings, execute purchases, check entitlements. API keys are configured in `lib/purchases.ts`. The entitlement ID is `"premium"`. RevenueCat user is identified by Supabase user ID via `Purchases.logIn(userId)`.
+- **Edge Functions:** Four functions deployed via `supabase functions deploy <name>`:
+  - `delete-account` — admin-deletes the auth user (cascades all DB rows).
+  - `revenuecat-webhook` — syncs subscription status from RevenueCat server events. Requires `REVENUECAT_WEBHOOK_SECRET` secret.
+  - `welcome-email` — sends Resend welcome email on first purchase. Requires `RESEND_API_KEY` and `FROM_EMAIL` secrets.
+  - `contact` — routes in-app feedback via Resend. Requires `RESEND_API_KEY`, `FROM_EMAIL`, `SUPPORT_EMAIL` secrets.
+- **Resend:** Set secrets in Supabase: `supabase secrets set RESEND_API_KEY=re_xxx FROM_EMAIL="Presence <hello@presence.app>" SUPPORT_EMAIL="support@presence.app"`
+- **Expo Notifications (local only):** Two notification types implemented in `lib/notifications.ts`:
+  1. **Warm-up:** Fires 15 min before block time. Re-scheduled by `initNotifications()` on app start.
+  2. **Inactivity:** Fires 48 h after last connection. Reset by `scheduleInactivityNotification()` in `onConnectionVerified()`.
 - **App Rating Strategy:** Use `expo-store-review` to trigger the native App Store rating prompt. **CRITICAL:** Only trigger this immediately after a successful OCR verification (the highest dopamine moment), and only do it on the user's 3rd lifetime successful connection to avoid spamming them early on.
 
 ## 8. Copywriting & Tone Standards
@@ -138,31 +146,78 @@ To ensure the app feels native, robust, and cheat-proof, you must implement the 
    - If a user completes the OCR validation while offline (e.g., on a subway), the app must still drop the Shield.
    - Use Zustand to cache the "Success" state and timestamp locally.
    - Implement a sync function that pushes this logged connection to the Supabase database the next time an active internet connection is detected.
+
 5. **Navigation Interception (Anti-Cheat & Hard Stops):**
    - **iOS (Swipe Back):** You MUST set `gestureEnabled: false` in the Expo Router `<Stack.Screen>` options for critical screens to prevent users from simply swiping left-to-right to escape.
    - **Android (Hardware Back):** Implement React Native's `BackHandler` to intercept and disable the physical/system back button.
    - **Where to apply this:** 1. **The Hard Paywall:** Prevent backing out to access the app for free. 2. **Onboarding:** Prevent skipping crucial commitment steps. 3. **The Shield Screen:** When the Shield is active, the user must not be able to swipe or press back to dismiss it and return to the blocked app.
 
-## 10. Development Roadmap (Phased Approach)
+6. **Subscription Enforcement:** The routing brain (`app/index.tsx`) checks `isSubscribed` from `useUserStore`. If `isOnboardingComplete && !isSubscribed`, the user is routed back to the paywall (handles lapsed subscriptions). This state is synced by both the RevenueCat webhook (server) and the local purchase flow.
+
+## 10. Known Platform Constraints & Gotchas
+
+These were discovered during development and must be respected:
+
+1. **Apple FamilyControls — Production Entitlement Required:**
+   - The `com.apple.developer.family-controls` entitlement requires explicit approval from Apple for App Store distribution.
+   - For development builds, enable the capability in Apple Developer Portal (App Identifiers → Capabilities) and delete the cached EAS provisioning profile via `eas credentials --platform ios`.
+   - **Ad-hoc builds on Windows also cannot use the development FamilyControls entitlement** — only production-approved builds work. Wait for Apple's approval before testing FamilyControls on physical devices via ad-hoc distribution.
+
+2. **Windows Cannot Prebuild iOS:**
+   - `npx expo prebuild --platform ios --clean` on Windows is silently skipped.
+   - All iOS native compilation must go through EAS Cloud.
+   - Android prebuilds work fine on Windows.
+
+3. **Swift Files Must NOT `import React`:**
+   - In the `RCT_EXTERN_MODULE` bridge pattern, Swift files import only Foundation/UIKit/etc.
+   - React Native ObjC types are provided by the auto-generated bridging header. `import React` in Swift will cause a build failure.
+
+4. **`@available(iOS X)` at Class Level Breaks ObjC Bridge:**
+   - Do NOT put `@available(iOS 16.0, *)` on the class — only put `guard #available(iOS 16.0, *)` inside individual methods that need it.
+
+5. **Gradle `dependencies {}` Regex:**
+   - When patching `build.gradle` via Config Plugin, regex `/dependencies\s*\{/` can match the buildscript block. Always target the `android {}` block's `dependencies` section specifically.
+
+6. **`PostgrestFilterBuilder.catch()` Not Typed in TS:**
+   - Do not chain `.catch()` on a Supabase query builder. Instead `await` the full query and destructure `{ error }`.
+
+7. **Zod v4 API Changes:**
+   - `errorMap` option renamed to `error` in Zod v4.
+   - Use `z.literal(true, { error: "key" })` not `{ errorMap: ... }`.
+
+8. **`supabase/functions/` Must Be Excluded from Root tsconfig:**
+   - Edge Functions run on Deno. Node.js `tsc` does not know about `Deno` global or `jsr:` imports.
+   - `tsconfig.json` `exclude` array must include `"supabase/functions"`.
+
+9. **Android Overlay Shield Architecture:**
+   - The `BlockerService` detects blocked apps via `UsageStatsManager` and broadcasts `com.franciccio.presence.SHOW_SHIELD`.
+   - The JS layer receives this via `DeviceEventEmitter` and sets `isBlocked: true` in the shield store.
+   - This brings the Presence app to the foreground (not a true `SYSTEM_ALERT_WINDOW` overlay). A native overlay Activity would require additional Kotlin code to draw over other apps without relying on the RN bridge being active.
+
+## 11. Pre-Launch Checklist (Before App Store Submission)
+
+These items must be completed before submitting to App Store / Play Store:
+
+- [ ] **RevenueCat API keys:** Replace `appl_XXXX` / `goog_XXXX` placeholders in `lib/purchases.ts` with real keys from the RevenueCat dashboard.
+- [ ] **RevenueCat entitlement:** Verify the entitlement ID `"premium"` matches what's configured in the RevenueCat dashboard.
+- [ ] **Supabase Edge Functions deployed:** Run `supabase functions deploy` for all 4 functions.
+- [ ] **Supabase secrets set:** `RESEND_API_KEY`, `FROM_EMAIL`, `SUPPORT_EMAIL`, `REVENUECAT_WEBHOOK_SECRET`.
+- [ ] **RevenueCat webhook configured:** Point the RevenueCat webhook to `https://<project-ref>.supabase.co/functions/v1/revenuecat-webhook`.
+- [ ] **TOS/Privacy URLs:** Replace placeholder `https://presence.app/terms` and `https://presence.app/privacy` in `step-7-paywall.tsx` and `profile.tsx` with real hosted pages.
+- [ ] **Apple FamilyControls production approval:** Wait for Apple approval; enable capability in Apple Developer Portal; delete cached EAS provisioning profile.
+- [ ] **`expo-notifications` installed:** Run `npm install` after adding to `package.json`.
+- [ ] **Supabase URL/keys:** Verify `lib/supabase.ts` has the production Supabase project URL and anon key.
+- [ ] **App Store assets:** Icon, screenshots, description, age rating, privacy nutrition labels.
+- [ ] **Android Play Store:** Content rating questionnaire; privacy policy URL; target API level 34+.
+
+## 12. Development Roadmap (Phased Approach)
 
 **CRITICAL INSTRUCTION FOR CLAUDE:** Do NOT attempt to build the entire app at once. We are building this strictly phase-by-phase. When I ask you to execute a phase, you must ONLY write code for that specific phase and stop. Do not jump ahead.
 
-- **[ ✅ DONE ] Phase 1: Foundation & Scaffolding** - Initialize Expo Router, basic folder structure, install dependencies, configure EAS development build.
-- **[ ✅ DONE ] Phase 2: State & Navigation** - Set up Zustand (with secure-store/async-storage platform logic), Supabase client initialization, and bare-bones Expo Router navigation flow.
-- **[ ✅ DONE ] Phase 3: UI & The "Cappuccino" Vibe** - Build the 7 Onboarding screens using NativeWind. Apply typography, colors, local `expo-image` assets, and the native bottom-sheet date picker.
-  - **Initialize i18n:** Wrap all text in translation functions.
-  - Do NOT build dashboard tabs yet.
-- **[ ✅ DONE ] Phase 4: Supabase Auth & Database Schema** - Build the Login/Signup flow.
-  - Create the Supabase DB schema for users, routines, and connection stats. Hook up the auth state to Zustand.
-- **[ ⏳ NEXT ] Phase 5: The Core Engine (Native Modules & Timezones) - _HIGHEST RISK_** - Write the Expo Config Plugins and native Swift/Kotlin bridges for Screen Time, UsageStats, and ML Kit/Vision OCR.
-  - Implement Timezone management (`date-fns`) for local vs UTC triggers.
-  - Wire the UI to the native blocker to test that the shield actually drops when an OCR image is verified.
-- **[ 🔒 LOCKED ] Phase 6: The Main Dashboard & Offline Handling**
-  - Build the Home, Analytics, and Profile tabs.
-  - Implement Graceful Offline Handling (cache OCR success locally and sync to Supabase when reconnected).
-- **[ 🔒 LOCKED ] Phase 7: Monetization, Notifications & Polish**
-  - Integrate RevenueCat paywall and deep linking (Auth).
-  - Implement AppState background listeners.
-  - Set up Expo local push notifications (Warm-up & Inactivity prompts).
-  - Configure Supabase Edge Functions for Resend transactional emails.
-  - Finalize the `expo-store-review` trigger on the 3rd successful connection.
+- **[ ✅ DONE ] Phase 1: Foundation & Scaffolding** — Initialize Expo Router, basic folder structure, install dependencies, configure EAS development build.
+- **[ ✅ DONE ] Phase 2: State & Navigation** — Set up Zustand (with secure-store/async-storage platform logic), Supabase client initialization, and bare-bones Expo Router navigation flow.
+- **[ ✅ DONE ] Phase 3: UI & The "Cappuccino" Vibe** — Build the 7 Onboarding screens using NativeWind. Apply typography, colors, local `expo-image` assets, and the native bottom-sheet date picker. Initialize i18n in all 5 locales.
+- **[ ✅ DONE ] Phase 4: Supabase Auth & Database Schema** — Build the Login/Signup flow. Create the Supabase DB schema for users, routines, and connection stats. Hook up the auth state to Zustand.
+- **[ ✅ DONE ] Phase 5: The Core Engine (Native Modules & Timezones)** — Write the Expo Config Plugins and native Swift/Kotlin bridges for Screen Time, UsageStats, and ML Kit/Vision OCR. Implement Timezone management (`date-fns`) for local vs UTC triggers.
+- **[ ✅ DONE ] Phase 6: The Main Dashboard & Offline Handling** — Build the Home, Analytics, and Profile tabs. Implement Graceful Offline Handling (cache OCR success locally and sync to Supabase when reconnected). Streak tracking. Language persistence.
+- **[ ✅ DONE ] Phase 7: Monetization, Notifications & Polish** — RevenueCat paywall (real purchase flow). `expo-notifications` local push (warm-up + inactivity). Supabase Edge Functions (delete-account, revenuecat-webhook, welcome-email, contact). AppState background listeners. `expo-store-review` on 3rd connection.

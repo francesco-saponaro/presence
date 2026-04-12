@@ -1,12 +1,25 @@
-import { View, Text, ScrollView } from "react-native";
+import { useState, useEffect } from "react";
+import { View, Text, ScrollView, ActivityIndicator, Alert, Linking } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { useTranslation } from "react-i18next";
+import type { PurchasesPackage } from "react-native-purchases";
 import { useOnboardingStore } from "@/store/onboardingStore";
 import { useUserStore } from "@/store/userStore";
 import { OnboardingProgress } from "@/components/ui/OnboardingProgress";
 import { PillButton } from "@/components/ui/PillButton";
+import {
+  getAnnualPackage,
+  purchasePackage,
+  restorePurchases,
+  extractEntitlement,
+} from "@/lib/purchases";
+import { supabase } from "@/lib/supabase";
+
+// Terms / Privacy URLs — update to real hosted pages before App Store submission
+const TOS_URL = "https://presence.app/terms";
+const PRIVACY_URL = "https://presence.app/privacy";
 
 export default function Step7Paywall() {
   const { t } = useTranslation();
@@ -14,16 +27,98 @@ export default function Step7Paywall() {
   const completeOnboarding = useOnboardingStore((s) => s.completeOnboarding);
   const setSubscribed = useUserStore((s) => s.setSubscribed);
 
-  function handleMockSubscribe() {
-    // RevenueCat purchase wired in Phase 5.
-    setSubscribed(true, new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString());
+  const [pkg, setPkg] = useState<PurchasesPackage | null>(null);
+  const [loadingOffering, setLoadingOffering] = useState(true);
+  const [purchasing, setPurchasing] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+
+  useEffect(() => {
+    getAnnualPackage()
+      .then(setPkg)
+      .finally(() => setLoadingOffering(false));
+  }, []);
+
+  // Shared post-purchase flow
+  async function handlePurchaseSuccess(expiresAt: string | null) {
+    // Persist subscription state locally
+    setSubscribed(true, expiresAt);
     completeOnboarding();
+
+    // Optimistically update Supabase profile (webhook will also do this)
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase
+        .from("profiles")
+        .update({
+          is_subscribed: true,
+          subscription_expires_at: expiresAt,
+        })
+        .eq("id", user.id);
+
+      // Trigger welcome email (best-effort)
+      supabase.functions
+        .invoke("welcome-email", { body: { email: user.email } })
+        .catch(() => {});
+    }
+
     router.replace("/(tabs)");
   }
 
+  async function handleSubscribe() {
+    if (!pkg) return;
+    setPurchasing(true);
+    try {
+      const info = await purchasePackage(pkg);
+      const { isActive, expiresAt } = extractEntitlement(info);
+      if (isActive) {
+        await handlePurchaseSuccess(expiresAt);
+      } else {
+        Alert.alert(
+          "Purchase incomplete",
+          "Your purchase was processed but we could not verify the entitlement. Please restore purchases or contact support."
+        );
+      }
+    } catch (e: any) {
+      // User cancelled — PurchasesErrorCode.purchaseCancelledError
+      if (e?.userCancelled) return;
+      Alert.alert(
+        "Purchase failed",
+        e?.message ?? "Something went wrong. Please try again."
+      );
+    } finally {
+      setPurchasing(false);
+    }
+  }
+
+  async function handleRestore() {
+    setRestoring(true);
+    try {
+      const info = await restorePurchases();
+      const { isActive, expiresAt } = extractEntitlement(info);
+      if (isActive) {
+        await handlePurchaseSuccess(expiresAt);
+      } else {
+        Alert.alert(
+          t("common.error"),
+          "No active subscription found for this Apple / Google account."
+        );
+      }
+    } catch (e: any) {
+      Alert.alert(t("common.error"), e?.message ?? t("common.error"));
+    } finally {
+      setRestoring(false);
+    }
+  }
+
+  // Derived price / period strings from the RevenueCat package if available,
+  // falling back to the i18n strings (which already have locale-specific prices)
+  const priceString = pkg?.product.priceString ?? t("onboarding.step7.price");
+  const periodString = t("onboarding.step7.period");
+
+  const isLoading = purchasing || restoring;
+
   return (
     <SafeAreaView className="flex-1 bg-espresso">
-      {/* Paywall uses dark/gradient background per spec */}
       <View className="px-6 pt-4">
         <OnboardingProgress current={7} total={7} />
       </View>
@@ -41,7 +136,7 @@ export default function Step7Paywall() {
           />
         </View>
 
-        {/* Label */}
+        {/* Step label */}
         <Text className="font-sans-medium text-xs tracking-widest text-greige text-center uppercase mb-3">
           {t("onboarding.step7.label")}
         </Text>
@@ -70,14 +165,20 @@ export default function Step7Paywall() {
           <Text className="font-sans-medium text-sm text-greige uppercase tracking-widest mb-2">
             {t("onboarding.step7.planLabel")}
           </Text>
-          <View className="flex-row items-end gap-1 mb-1">
-            <Text className="font-serif-display text-5xl text-tan">
-              {t("onboarding.step7.price")}
-            </Text>
-            <Text className="font-sans-body text-base text-greige mb-2">
-              {t("onboarding.step7.period")}
-            </Text>
-          </View>
+
+          {loadingOffering ? (
+            <ActivityIndicator color="#D6B588" style={{ marginVertical: 16 }} />
+          ) : (
+            <View className="flex-row items-end gap-1 mb-1">
+              <Text className="font-serif-display text-5xl text-tan">
+                {priceString}
+              </Text>
+              <Text className="font-sans-body text-base text-greige mb-2">
+                {periodString}
+              </Text>
+            </View>
+          )}
+
           <Text className="font-sans-medium text-xs text-brown-mid">
             {t("onboarding.step7.trial")}
           </Text>
@@ -90,23 +191,35 @@ export default function Step7Paywall() {
         style={{ paddingBottom: Math.max(insets.bottom, 24) }}
       >
         <PillButton
-          label={t("onboarding.step7.cta")}
+          label={isLoading && purchasing ? t("common.loading") : t("onboarding.step7.cta")}
           variant="secondary"
-          onPress={handleMockSubscribe}
+          onPress={handleSubscribe}
+          disabled={isLoading || loadingOffering || !pkg}
         />
 
         <PillButton
-          label={t("onboarding.step7.restore")}
+          label={isLoading && restoring ? t("common.loading") : t("onboarding.step7.restore")}
           variant="ghost"
-          onPress={() => {}}
+          onPress={handleRestore}
+          disabled={isLoading}
         />
 
         <Text className="font-sans-body text-xs text-brown-mid text-center">
           {t("onboarding.step7.disclaimer")}
           {"  ·  "}
-          <Text className="underline">{t("onboarding.step7.terms")}</Text>
+          <Text
+            className="underline"
+            onPress={() => Linking.openURL(TOS_URL)}
+          >
+            {t("onboarding.step7.terms")}
+          </Text>
           {"  ·  "}
-          <Text className="underline">{t("onboarding.step7.privacy")}</Text>
+          <Text
+            className="underline"
+            onPress={() => Linking.openURL(PRIVACY_URL)}
+          >
+            {t("onboarding.step7.privacy")}
+          </Text>
         </Text>
       </View>
     </SafeAreaView>

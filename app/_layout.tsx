@@ -20,8 +20,18 @@ import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/store/auth";
 import { useUserStore } from "@/store/userStore";
 import { startShieldEngine } from "@/lib/shieldEngine";
+import {
+  configurePurchases,
+  identifyPurchasesUser,
+  resetPurchasesUser,
+} from "@/lib/purchases";
+import { initNotifications } from "@/lib/notifications";
+import i18n from "@/i18n";
 
 SplashScreen.preventAutoHideAsync();
+
+// Configure RevenueCat once at module load (before any component mounts)
+configurePurchases();
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -31,33 +41,48 @@ export default function RootLayout() {
     "DMSans-Bold": DMSans_700Bold,
   });
 
+  // Restore the user's saved language preference on every cold start.
+  useEffect(() => {
+    const savedLang = useUserStore.getState().language;
+    if (savedLang && savedLang !== i18n.language) {
+      i18n.changeLanguage(savedLang);
+    }
+  }, []);
+
   // Start the shield engine once on mount (AppState listener + schedule check).
   useEffect(() => {
     const stop = startShieldEngine();
     return stop;
   }, []);
 
-  // Wire up the Supabase auth listener immediately — do NOT wait for fonts.
-  // This keeps the Zustand session store in sync with Supabase for the entire
-  // app lifetime: initial session restore, token refresh, sign-out, OAuth, etc.
+  // Initialize notifications once on mount (sets handler + schedules warm-up).
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        // Use getState() to avoid stale closure over store values.
-        useAuthStore.getState().setSession(session);
+    initNotifications();
+  }, []);
 
-        if (session?.user) {
-          useUserStore.getState().setUser(
-            session.user.id,
-            session.user.email ?? ""
-          );
-        }
+  // Keep Zustand session store in sync with Supabase for the entire app lifetime.
+  // Also identifies / de-identifies the RevenueCat user on auth state change.
+  useEffect(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      useAuthStore.getState().setSession(session);
 
-        if (event === "SIGNED_OUT") {
-          useUserStore.getState().clearUser();
-        }
+      if (session?.user) {
+        useUserStore.getState().setUser(
+          session.user.id,
+          session.user.email ?? ""
+        );
+
+        // Tie RevenueCat purchases to this Supabase user ID
+        identifyPurchasesUser(session.user.id);
       }
-    );
+
+      if (event === "SIGNED_OUT") {
+        useUserStore.getState().clearUser();
+        resetPurchasesUser();
+      }
+    });
 
     return () => subscription.unsubscribe();
   }, []);

@@ -1,11 +1,17 @@
 import { useState } from "react";
-import { View, Text, Switch, ScrollView, Platform } from "react-native";
+import { View, Text, Switch, ScrollView, Platform, Alert } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useTranslation } from "react-i18next";
+import * as Notifications from "expo-notifications";
+import * as ImagePicker from "expo-image-picker";
 import { useOnboardingStore } from "@/store/onboardingStore";
 import { OnboardingProgress } from "@/components/ui/OnboardingProgress";
 import { PillButton } from "@/components/ui/PillButton";
+import {
+  ScreenTimeModule,
+  BlockerModule,
+} from "@/lib/nativeModules";
 
 type PermKey = "screenTime" | "notifications" | "activityTracking" | "photoLibrary";
 
@@ -15,6 +21,53 @@ const PERMISSIONS: { key: PermKey; icon: string }[] = [
   { key: "activityTracking", icon: "📊" },
   { key: "photoLibrary", icon: "🖼" },
 ];
+
+async function requestPermission(key: PermKey): Promise<boolean> {
+  switch (key) {
+    case "screenTime": {
+      if (Platform.OS === "ios") {
+        try {
+          await ScreenTimeModule.requestAuthorization();
+          return true;
+        } catch {
+          return false;
+        }
+      }
+      if (Platform.OS === "android") {
+        // Leads user to Android's Usage Access settings page
+        await BlockerModule.openUsageAccessSettings();
+        // We can't know immediately if they granted it — optimistically return true
+        // The actual check happens at shield-activation time
+        return true;
+      }
+      return false;
+    }
+
+    case "notifications": {
+      const { status } = await Notifications.requestPermissionsAsync();
+      return status === "granted";
+    }
+
+    case "activityTracking": {
+      if (Platform.OS === "android") {
+        // Battery optimization must be disabled for the background blocker service
+        await BlockerModule.openBatteryOptimizationSettings();
+        return true;
+      }
+      // iOS: Activity Tracking (ATT) is not relevant for Presence — we don't use ad tracking.
+      // We show this row for transparency but there's nothing to request.
+      return true;
+    }
+
+    case "photoLibrary": {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      return status === "granted";
+    }
+
+    default:
+      return false;
+  }
+}
 
 export default function Step6Permissions() {
   const { t } = useTranslation();
@@ -29,9 +82,39 @@ export default function Step6Permissions() {
   });
 
   async function handleToggle(key: PermKey, value: boolean) {
-    // Native permission requests wired in Phase 6 (native modules).
-    // For now, toggle the local state to demonstrate the UI.
-    setGranted((prev) => ({ ...prev, [key]: value }));
+    if (!value) {
+      // Toggling off — just update UI (user must go to Settings manually to revoke)
+      setGranted((prev) => ({ ...prev, [key]: false }));
+      return;
+    }
+
+    // Android-specific guidance before opening settings
+    if (Platform.OS === "android" && key === "screenTime") {
+      Alert.alert(
+        "Usage Access",
+        "On the next screen, find 'Presence' in the list and enable it.",
+        [{ text: "OK", onPress: async () => {
+          const ok = await requestPermission(key);
+          setGranted((prev) => ({ ...prev, [key]: ok }));
+        }}]
+      );
+      return;
+    }
+
+    if (Platform.OS === "android" && key === "activityTracking") {
+      Alert.alert(
+        "Battery Optimization",
+        "On the next screen, tap 'Don't optimize' so Presence can run in the background.",
+        [{ text: "OK", onPress: async () => {
+          const ok = await requestPermission(key);
+          setGranted((prev) => ({ ...prev, [key]: ok }));
+        }}]
+      );
+      return;
+    }
+
+    const ok = await requestPermission(key);
+    setGranted((prev) => ({ ...prev, [key]: ok }));
   }
 
   function handleNext() {
@@ -96,7 +179,7 @@ export default function Step6Permissions() {
                 value={granted[key]}
                 onValueChange={(v) => handleToggle(key, v)}
                 trackColor={{ false: "#C6C0B9", true: "#705E46" }}
-                thumbColor={granted[key] ? "#FAF7F2" : "#FAF7F2"}
+                thumbColor="#FAF7F2"
                 ios_backgroundColor="#C6C0B9"
               />
             </View>
@@ -104,7 +187,7 @@ export default function Step6Permissions() {
         </View>
       </ScrollView>
 
-      {/* CTA — all 4 are optional, user can always skip */}
+      {/* CTA — all 4 are optional; user can always proceed */}
       <View
         className="px-6 pb-8 pt-4 border-t border-surface-light dark:border-surface-dark"
         style={{ paddingBottom: Math.max(insets.bottom, 24) }}

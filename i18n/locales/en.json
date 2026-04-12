@@ -125,22 +125,39 @@
   "analytics": {
     "tab": "Analytics",
     "connections": "Genuine Connections",
-    "streak": "Current Streak",
+    "streak": "Day Streak",
     "timeReclaimed": "Time Reclaimed",
-    "empty": "No connections yet. Start by reaching out to someone real."
+    "days": "days",
+    "empty": "No connections yet. Start by reaching out to someone real.",
+    "emptyTitle": "Nothing here yet.",
+    "insightTitle": "{{count}} genuine connections made.",
+    "insightBody": "That's {{time}} of real human connection."
   },
   "profile": {
     "tab": "Profile",
     "title": "Profile",
-    "manageRoutine": "Manage Routine",
+    "sectionRoutine": "Your Routine",
+    "sectionPreferences": "Preferences",
+    "sectionSupport": "Support",
+    "sectionAccount": "Account",
+    "manageRoutine": "Block Time",
+    "frequency": "Frequency",
     "blockedApps": "Blocked Apps",
     "language": "Language",
+    "notSet": "Not set",
     "feedback": "Feedback & Contact",
     "terms": "Terms of Service",
     "privacy": "Privacy Policy",
     "logout": "Log Out",
+    "logoutConfirm": "Are you sure you want to sign out?",
     "deleteAccount": "Delete Account",
-    "manageSubscription": "Manage Subscription"
+    "deleteConfirmTitle": "Delete your account?",
+    "deleteConfirmBody": "This will permanently delete all your data. This cannot be undone.",
+    "deleteConfirmAction": "Delete permanently",
+    "manageSubscription": "Manage Subscription",
+    "langPickerTitle": "Choose Language",
+    "version": "Version {{version}}",
+    "copyright": "© 2026 Presence. All rights reserved."
   },
   "shield": {
     "title": "Replace meme sending with actual genuine connection. Text someone, upload the screenshot, and unlock your apps.",

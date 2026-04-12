@@ -30,8 +30,7 @@
         "android.permission.SYSTEM_ALERT_WINDOW",
         "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
         "android.permission.FOREGROUND_SERVICE",
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.READ_EXTERNAL_STORAGE"
       ],
       "predictiveBackGestureEnabled": false
     },
@@ -62,7 +61,15 @@
         }
       ],
       "./plugins/withScreenTime.js",
-      "./plugins/withAndroidBlocker.js"
+      "./plugins/withAndroidBlocker.js",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#D6B588",
+          "defaultChannel": "presence-reminders"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

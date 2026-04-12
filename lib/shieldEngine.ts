@@ -19,6 +19,7 @@ import { useUserStore } from "@/store/userStore";
 import { isBlockTimeActive } from "./timezone";
 import { ScreenTimeModule, BlockerModule, addShieldActivatedListener } from "./nativeModules";
 import { supabase } from "./supabase";
+import { scheduleInactivityNotification } from "./notifications";
 
 // ── Native shield primitives ─────────────────────────────────────────────────
 
@@ -70,16 +71,20 @@ export async function checkAndUpdateShield(): Promise<void> {
  */
 export async function onConnectionVerified(wasManualBypass = false): Promise<void> {
   const { setBlocked, addPendingConnection, resetOcrFail } = useShieldStore.getState();
-  const { incrementConnections } = useUserStore.getState();
+  const { recordConnection } = useUserStore.getState();
 
   const timestamp = new Date().toISOString();
 
   setBlocked(false);
   resetOcrFail();
   addPendingConnection(timestamp);
-  incrementConnections();
+  recordConnection();
 
   await deactivateNativeShield();
+
+  // Reset the 48-hour inactivity notification from this moment
+  scheduleInactivityNotification().catch(console.warn);
+
   // Fire-and-forget: sync happens opportunistically
   syncPendingConnections().catch(console.warn);
 }
@@ -111,11 +116,11 @@ export async function syncPendingConnections(): Promise<void> {
 
   // Mirror the lifetime count into the profiles table
   const total = useUserStore.getState().lifetimeSuccessfulConnections;
-  await supabase
+  const { error: updateError } = await supabase
     .from("profiles")
     .update({ lifetime_connections: total })
-    .eq("id", session.user.id)
-    .catch(console.warn);
+    .eq("id", session.user.id);
+  if (updateError) console.warn("[shieldEngine] profile update:", updateError);
 }
 
 // ── Engine lifecycle ─────────────────────────────────────────────────────────
@@ -136,7 +141,11 @@ export function startShieldEngine(): () => void {
 
   // AppState: foreground re-check (anti-cheat)
   const handleAppState = (next: AppStateStatus) => {
-    if (next === "active") checkAndUpdateShield().catch(console.warn);
+    if (next === "active") {
+      checkAndUpdateShield().catch(console.warn);
+      // Opportunistic sync: push any offline-cached connections to Supabase
+      syncPendingConnections().catch(console.warn);
+    }
   };
   const appStateSub = AppState.addEventListener("change", handleAppState);
 
