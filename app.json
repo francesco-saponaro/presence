@@ -62,6 +62,7 @@
       ],
       "./plugins/withScreenTime.js",
       "./plugins/withAndroidBlocker.js",
+      "./plugins/withSwiftFiles.js",
       [
         "expo-notifications",
         {
