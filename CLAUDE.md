@@ -40,8 +40,8 @@
 1. **Localization is Mandatory:** DO NOT hardcode any English text directly into React components. Every user-facing string must be wrapped in the `t()` function from `react-i18next`. All 5 locale files (en, es, fr, it, pt) in `i18n/locales/` must be updated simultaneously.
 2. **Local Assets & Expo Image:** DO NOT use external URLs, Unsplash links, or standard RN `<Image>`. You MUST use `expo-image` and load the specific provided local files (e.g., `source={require('../assets/images/onboarding-1.png')}`). Ensure `contentFit="contain"` is used so backgrounds blend perfectly into the `#FAF7F2` or `#261B10` app backgrounds.
 3. **No Confetti/Cheap UI:** Use heavy `@gorhom/bottom-sheet`, smooth premium transitions (`react-native-reanimated`), and glassmorphism (`expo-glass-effect`).
-4. **Native Swift Bridges:** Provide the exact Swift code for bridging FamilyControls and Vision (OCR), along with the necessary Expo Config Plugin (e.g., `withScreenTime.js`) to inject entitlements into `Info.plist` and `.entitlements` during the prebuild phase.
-5. **Classic Bridge (NOT New Architecture):** The project uses the classic React Native bridge. `newArchEnabled` must NOT be in app.json. The `RCT_EXTERN_MODULE` / `RCT_EXTERN_METHOD` ObjC bridge pattern is used for Swift modules. Swift files must NOT `import React` — types come through the ObjC bridging header automatically.
+4. **Native Swift Bridges:** The native-src Architecture (CRITICAL): DO NOT write any files directly into the ios/ or android/ directories. Because this is an Expo project developed on Windows, those folders are ephemeral, wiped frequently, and ignored by Git. ALL custom native code (.swift, .m, .kt, .java) MUST be placed in a root directory named native-src/. You must then write an Expo Config Plugin (e.g., plugins/withSwiftFiles.js) to manually copy these files into the native directories during the EAS prebuild phase.
+5. **Native Module Bridging & Imports:** The project uses modern Expo where the New Architecture (newArchEnabled) is true by default. We are utilizing the interop layer for our custom native modules using the RCT_EXTERN_MODULE / RCT_EXTERN_METHOD ObjC bridge pattern. CRITICAL: Because of this, if a Swift file utilizes RCTPromiseResolveBlock or RCTPromiseRejectBlock, it MUST explicitly contain import React at the top of the Swift file, otherwise the EAS cloud compiler will fail.
 6. **Zod v4 API:** This project uses Zod v4. The `errorMap` option is renamed to `error`. Use `z.literal(true, { error: "..." })` not `{ errorMap: ... }`.
 
 ## 5. UI/UX & Brand Guidelines (The "Cappuccino" Palette)
@@ -168,9 +168,9 @@ These were discovered during development and must be respected:
    - All iOS native compilation must go through EAS Cloud.
    - Android prebuilds work fine on Windows.
 
-3. **Swift Files Must NOT `import React`:**
-   - In the `RCT_EXTERN_MODULE` bridge pattern, Swift files import only Foundation/UIKit/etc.
-   - React Native ObjC types are provided by the auto-generated bridging header. `import React` in Swift will cause a build failure.
+3. **Swift Files & React Imports:**
+   - In the RCT_EXTERN_MODULE bridge pattern, React Native ObjC types are provided by the auto-generated bridging header.
+   - HOWEVER, if you are explicitly using React Native types inside the Swift file itself (like RCTPromiseResolveBlock or RCTPromiseRejectBlock), you MUST add import React to the top of the Swift file.
 
 4. **`@available(iOS X)` at Class Level Breaks ObjC Bridge:**
    - Do NOT put `@available(iOS 16.0, *)` on the class — only put `guard #available(iOS 16.0, *)` inside individual methods that need it.
@@ -193,6 +193,11 @@ These were discovered during development and must be respected:
    - The `BlockerService` detects blocked apps via `UsageStatsManager` and broadcasts `com.franciccio.presence.SHOW_SHIELD`.
    - The JS layer receives this via `DeviceEventEmitter` and sets `isBlocked: true` in the shield store.
    - This brings the Presence app to the foreground (not a true `SYSTEM_ALERT_WINDOW` overlay). A native overlay Activity would require additional Kotlin code to draw over other apps without relying on the RN bridge being active.
+
+10. **The Ephemeral Folders Trap:**
+
+- Never instruct the user to "open Xcode" or "modify files in the ios/ folder."
+- You must act as if the ios/ and android/ folders are completely invisible. Every single native modification (adding files, tweaking Info.plist, editing AndroidManifest.xml) must be done exclusively via Expo Config Plugins inside the app.json plugins array.
 
 ## 11. Pre-Launch Checklist (Before App Store Submission)
 
