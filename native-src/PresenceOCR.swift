@@ -1,6 +1,7 @@
 import Foundation
 import Vision
 import UIKit
+import React // Fixes the missing RCTPromise block errors
 
 @objc(PresenceOCR)
 public class PresenceOCR: NSObject {
@@ -9,14 +10,14 @@ public class PresenceOCR: NSObject {
     public func scanImage(_ imagePath: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         guard let image = UIImage(contentsOfFile: imagePath),
               let cgImage = image.cgImage else {
-            reject("IMAGE_ERROR", "Could not load image at path", nil)
+            reject("IMAGE_ERROR", "Could not load image at path", nil as Error?) // Fixes the 'nil' error
             return
         }
         
         let requestHandler = VNImageRequestHandler(cgImage: cgImage, options: [:])
         let request = VNRecognizeTextRequest { (request, error) in
             if let error = error {
-                reject("OCR_ERROR", error.localizedDescription, error)
+                reject("OCR_ERROR", error.localizedDescription, error as Error?)
                 return
             }
             
@@ -32,12 +33,13 @@ public class PresenceOCR: NSObject {
             resolve(recognizedText)
         }
         
-        request.recognitionLevel = .accurate
+        // Fixes the 'accurate' enum inference error
+        request.recognitionLevel = VNRequestTextRecognitionLevel.accurate
         
         do {
             try requestHandler.perform([request])
         } catch {
-            reject("SCAN_ERROR", "Failed to perform OCR", error)
+            reject("SCAN_ERROR", "Failed to perform OCR", error as Error?)
         }
     }
 }
