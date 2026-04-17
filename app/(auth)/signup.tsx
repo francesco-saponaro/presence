@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
+  Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -16,12 +17,18 @@ import Toast from "react-native-toast-message";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { signupSchema, type SignupForm } from "@/lib/validation";
+import { useOnboardingStore } from "@/store/onboardingStore";
+import { signInWithApple, signInWithGoogle } from "@/lib/socialAuth";
 import { AuthInput } from "@/components/ui/AuthInput";
 import { PillButton } from "@/components/ui/PillButton";
+
+const TOS_URL = "https://presence.app/terms";
+const PRIVACY_URL = "https://presence.app/privacy";
 
 export default function SignupScreen() {
   const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(false);
+  const isOnboardingComplete = useOnboardingStore((s) => s.isOnboardingComplete);
 
   const { control, handleSubmit, formState: { errors }, watch, setValue } =
     useForm<SignupForm>({
@@ -33,7 +40,7 @@ export default function SignupScreen() {
 
   async function onSubmit({ email, password }: SignupForm) {
     setIsLoading(true);
-    const { error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabase.auth.signUp({ email, password });
     setIsLoading(false);
 
     if (error) {
@@ -41,22 +48,49 @@ export default function SignupScreen() {
       return;
     }
 
-    // If email confirmation is disabled in Supabase, onAuthStateChange fires
-    // SIGNED_IN immediately and index.tsx routes to onboarding.
-    // If enabled, show a "check your email" toast and stay on this screen.
-    Toast.show({
-      type: "success",
-      text1: t("auth.resetSent"),
-      text2: t("auth.resetSentBody", { email }),
-    });
+    if (data.session) {
+      // Email confirmation is disabled in Supabase — signed in immediately.
+      router.replace(isOnboardingComplete ? "/(tabs)" : "/(onboarding)/step-1-hook");
+    } else {
+      // Email confirmation is still enabled — prompt them to check their inbox.
+      Toast.show({
+        type: "success",
+        text1: t("auth.resetSent"),
+        text2: t("auth.resetSentBody", { email }),
+      });
+    }
   }
 
-  function handleSocialPlaceholder() {
-    Toast.show({
-      type: "info",
-      text1: "Coming soon",
-      text2: "Social sign-in will be available in an upcoming update.",
-    });
+  async function handleApple() {
+    setIsLoading(true);
+    try {
+      const { error } = await signInWithApple();
+      if (error) Toast.show({ type: "error", text1: error.message });
+      // onAuthStateChange in _layout.tsx handles session + routing
+    } catch (e: any) {
+      // AppleAuthenticationError code 1001 = user cancelled — stay silent
+      if (e?.code !== "ERR_REQUEST_CANCELED") {
+        Toast.show({ type: "error", text1: e?.message ?? t("common.error") });
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function handleGoogle() {
+    setIsLoading(true);
+    try {
+      const { error } = await signInWithGoogle();
+      if (error) Toast.show({ type: "error", text1: error.message });
+      // onAuthStateChange in _layout.tsx handles session + routing
+    } catch (e: any) {
+      // User cancelled the Google picker — stay silent
+      if (e?.code !== "SIGN_IN_CANCELLED") {
+        Toast.show({ type: "error", text1: e?.message ?? t("common.error") });
+      }
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   return (
@@ -144,29 +178,44 @@ export default function SignupScreen() {
             />
 
             {/* TOS checkbox */}
-            <TouchableOpacity
-              onPress={() => setValue("tosAccepted", tosAccepted ? (undefined as any) : true)}
-              activeOpacity={0.7}
-              className="flex-row items-start gap-3 mb-2"
-            >
-              <View
-                className={[
-                  "w-5 h-5 rounded-md border-2 mt-0.5 items-center justify-center flex-shrink-0",
-                  tosAccepted
-                    ? "bg-brown-dark border-brown-dark dark:bg-tan dark:border-tan"
-                    : "border-greige dark:border-brown-mid",
-                ].join(" ")}
+            <View className="flex-row items-start gap-3 mb-2">
+              <TouchableOpacity
+                onPress={() => setValue("tosAccepted", tosAccepted ? (undefined as any) : true)}
+                activeOpacity={0.7}
+                className="mt-0.5 flex-shrink-0"
               >
-                {tosAccepted && (
-                  <Text className="text-text-light dark:text-espresso text-xs font-sans-bold leading-none">
-                    ✓
-                  </Text>
-                )}
-              </View>
+                <View
+                  className={[
+                    "w-5 h-5 rounded-md border-2 items-center justify-center",
+                    tosAccepted
+                      ? "bg-brown-dark border-brown-dark dark:bg-tan dark:border-tan"
+                      : "border-greige dark:border-brown-mid",
+                  ].join(" ")}
+                >
+                  {tosAccepted && (
+                    <Text className="text-text-light dark:text-espresso text-xs font-sans-bold leading-none">
+                      ✓
+                    </Text>
+                  )}
+                </View>
+              </TouchableOpacity>
               <Text className="flex-1 font-sans-body text-sm text-brown-mid dark:text-greige leading-relaxed">
-                {t("auth.tosAgreement")}
+                {t("auth.tosAgreePre")}
+                <Text
+                  className="text-brown-dark dark:text-tan underline"
+                  onPress={() => Linking.openURL(TOS_URL)}
+                >
+                  {t("auth.termsLink")}
+                </Text>
+                {t("auth.tosAgreeMid")}
+                <Text
+                  className="text-brown-dark dark:text-tan underline"
+                  onPress={() => Linking.openURL(PRIVACY_URL)}
+                >
+                  {t("auth.privacyLink")}
+                </Text>
               </Text>
-            </TouchableOpacity>
+            </View>
             {errors.tosAccepted && (
               <Text className="font-sans-body text-xs text-red-400 mb-4 ml-8">
                 {t(errors.tosAccepted.message as string)}
@@ -194,20 +243,24 @@ export default function SignupScreen() {
 
             {/* Social */}
             <View className="gap-3 mb-8">
-              <TouchableOpacity
-                onPress={handleSocialPlaceholder}
-                activeOpacity={0.7}
-                className="flex-row items-center justify-center gap-3 rounded-full border border-greige dark:border-brown-mid py-4 px-6"
-              >
-                <Ionicons name="logo-apple" size={20} color="#2A1800" />
-                <Text className="font-sans-medium text-base text-text-dark dark:text-text-light">
-                  {t("auth.apple")}
-                </Text>
-              </TouchableOpacity>
+              {Platform.OS === "ios" && (
+                <TouchableOpacity
+                  onPress={handleApple}
+                  activeOpacity={0.7}
+                  disabled={isLoading}
+                  className="flex-row items-center justify-center gap-3 rounded-full border border-greige dark:border-brown-mid py-4 px-6"
+                >
+                  <Ionicons name="logo-apple" size={20} color="#2A1800" />
+                  <Text className="font-sans-medium text-base text-text-dark dark:text-text-light">
+                    {t("auth.apple")}
+                  </Text>
+                </TouchableOpacity>
+              )}
 
               <TouchableOpacity
-                onPress={handleSocialPlaceholder}
+                onPress={handleGoogle}
                 activeOpacity={0.7}
+                disabled={isLoading}
                 className="flex-row items-center justify-center gap-3 rounded-full border border-greige dark:border-brown-mid py-4 px-6"
               >
                 <Ionicons name="logo-google" size={18} color="#2A1800" />

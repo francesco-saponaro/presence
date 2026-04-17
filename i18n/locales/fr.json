@@ -6,6 +6,7 @@
     "login": "Se connecter", "signup": "Créer un compte", "forgotPassword": "Mot de passe oublié ?", "email": "E-mail", "password": "Mot de passe", "confirmPassword": "Confirmer le mot de passe", "newPassword": "Nouveau mot de passe",
     "passwordMin": "Le mot de passe doit contenir au moins 8 caractères", "passwordMatch": "Les mots de passe ne correspondent pas", "invalidEmail": "Veuillez entrer une adresse e-mail valide", "tosRequired": "Vous devez accepter les conditions pour continuer",
     "orContinueWith": "ou continuer avec", "apple": "Continuer avec Apple", "google": "Continuer avec Google", "tosAgreement": "J'accepte les Conditions d'utilisation et la Politique de confidentialité",
+    "tosAgreePre": "J'accepte les ", "tosAgreeMid": " et la ", "termsLink": "Conditions d'utilisation", "privacyLink": "Politique de confidentialité",
     "noAccount": "Pas encore de compte ?", "hasAccount": "Déjà un compte ?", "signUpLink": "S'inscrire", "signInLink": "Se connecter",
     "sendReset": "Envoyer le lien de réinitialisation", "resetSent": "Vérifiez votre e-mail", "resetSentBody": "Nous avons envoyé un lien à {{email}}.",
     "backToLogin": "Retour à la connexion", "updatePassword": "Mettre à jour le mot de passe", "passwordUpdated": "Mot de passe mis à jour. Veuillez vous connecter.",

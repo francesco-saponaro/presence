@@ -6,6 +6,7 @@
     "login": "Iniciar sesión", "signup": "Crear cuenta", "forgotPassword": "¿Olvidaste tu contraseña?", "email": "Correo electrónico", "password": "Contraseña", "confirmPassword": "Confirmar contraseña", "newPassword": "Nueva contraseña",
     "passwordMin": "La contraseña debe tener al menos 8 caracteres", "passwordMatch": "Las contraseñas no coinciden", "invalidEmail": "Ingresa un correo electrónico válido", "tosRequired": "Debes aceptar los términos para continuar",
     "orContinueWith": "o continuar con", "apple": "Continuar con Apple", "google": "Continuar con Google", "tosAgreement": "Acepto los Términos de servicio y la Política de privacidad",
+    "tosAgreePre": "Acepto los ", "tosAgreeMid": " y la ", "termsLink": "Términos de Servicio", "privacyLink": "Política de Privacidad",
     "noAccount": "¿No tienes una cuenta?", "hasAccount": "¿Ya tienes una cuenta?", "signUpLink": "Regístrate", "signInLink": "Iniciar sesión",
     "sendReset": "Enviar enlace de restablecimiento", "resetSent": "Revisa tu correo", "resetSentBody": "Enviamos un enlace a {{email}}.",
     "backToLogin": "Volver al inicio de sesión", "updatePassword": "Actualizar contraseña", "passwordUpdated": "Contraseña actualizada. Por favor inicia sesión.",

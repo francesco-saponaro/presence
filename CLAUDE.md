@@ -43,6 +43,7 @@
 4. **Native Swift Bridges:** The native-src Architecture (CRITICAL): DO NOT write any files directly into the ios/ or android/ directories. Because this is an Expo project developed on Windows, those folders are ephemeral, wiped frequently, and ignored by Git. ALL custom native code (.swift, .m, .kt, .java) MUST be placed in a root directory named native-src/. You must then write an Expo Config Plugin (e.g., plugins/withSwiftFiles.js) to manually copy these files into the native directories during the EAS prebuild phase.
 5. **Native Module Bridging & Imports:** The project uses modern Expo where the New Architecture (newArchEnabled) is true by default. We are utilizing the interop layer for our custom native modules using the RCT_EXTERN_MODULE / RCT_EXTERN_METHOD ObjC bridge pattern. CRITICAL: Because of this, if a Swift file utilizes RCTPromiseResolveBlock or RCTPromiseRejectBlock, it MUST explicitly contain import React at the top of the Swift file, otherwise the EAS cloud compiler will fail.
 6. **Zod v4 API:** This project uses Zod v4. The `errorMap` option is renamed to `error`. Use `z.literal(true, { error: "..." })` not `{ errorMap: ... }`.
+7. **Native OAuth & Direct Sign-Up (Supabase):** Email confirmation must be **disabled** in the Supabase dashboard (`Auth > Providers > Email > Confirm email: OFF`) for direct sign-up to work. Do NOT use `supabase.auth.signInWithOAuth()` — it opens a web browser and kills UX. Use native OS popups instead: `expo-apple-authentication` (iOS only) → `supabase.auth.signInWithIdToken({ provider: 'apple', token: identityToken })`, and `@react-native-google-signin/google-signin` (both platforms) → `supabase.auth.signInWithIdToken({ provider: 'google', token: idToken })`. Shared logic lives in `lib/socialAuth.ts`. The Apple button must only render on `Platform.OS === 'ios'`. Google requires `webClientId` and `iosClientId` from Google Cloud Console configured in `lib/socialAuth.ts`.
 
 ## 5. UI/UX & Brand Guidelines (The "Cappuccino" Palette)
 
@@ -62,6 +63,7 @@
 ### A. Authentication
 
 - Sign Up/Login (Email, Apple, Google).
+- **Native OAuth Libraries (CRITICAL):** Do NOT use `supabase.auth.signInWithOAuth()` because it kicks users to a web browser. You MUST use `expo-apple-authentication` and `@react-native-google-signin/google-signin` to trigger native OS-level biometric popups. Once the native token is received, authenticate with Supabase using `supabase.auth.signInWithIdToken()`.
 - Must include a text linking to TOS and Privacy Policy.
 - Forgot Password (Supabase magic link/reset).
 - Keep Splash Screen (`expo-splash-screen`) visible until Auth session and i18n are fully loaded.
@@ -211,6 +213,9 @@ These items must be completed before submitting to App Store / Play Store:
 - [ ] **TOS/Privacy URLs:** Replace placeholder `https://presence.app/terms` and `https://presence.app/privacy` in `step-7-paywall.tsx` and `profile.tsx` with real hosted pages.
 - [ ] **Apple FamilyControls production approval:** Wait for Apple approval; enable capability in Apple Developer Portal; delete cached EAS provisioning profile.
 - [ ] **`expo-notifications` installed:** Run `npm install` after adding to `package.json`.
+- [ ] **Supabase email confirmation:** Disable "Confirm email" in `Auth > Providers > Email` in the Supabase dashboard so users sign up directly without a verification email.
+- [ ] **Supabase OAuth providers:** Enable Apple and Google providers in Supabase `Auth > Providers`. No redirect URL configuration needed (native `signInWithIdToken` flow, no browser redirect).
+- [ ] **Google Sign-In client IDs:** Replace `PLACEHOLDER_WEB_CLIENT_ID` and `PLACEHOLDER_IOS_CLIENT_ID` in `lib/socialAuth.ts` and `app.json` with real values from Google Cloud Console (OAuth 2.0 Client IDs).
 - [ ] **Supabase URL/keys:** Verify `lib/supabase.ts` has the production Supabase project URL and anon key.
 - [ ] **App Store assets:** Icon, screenshots, description, age rating, privacy nutrition labels.
 - [ ] **Android Play Store:** Content rating questionnaire; privacy policy URL; target API level 34+.

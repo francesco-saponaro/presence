@@ -60,6 +60,13 @@
           "photosPermission": "Presence needs your photo library to verify your connection screenshot."
         }
       ],
+      "expo-apple-authentication",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.477480292838-crt7tbqla5dtt3uosfefjvbc7lbebnk8"
+        }
+      ],
       "./plugins/withScreenTime.js",
       "./plugins/withAndroidBlocker.js",
       "./plugins/withSwiftFiles.js",

@@ -17,6 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { loginSchema, type LoginForm } from "@/lib/validation";
 import { useOnboardingStore } from "@/store/onboardingStore";
+import { signInWithApple, signInWithGoogle } from "@/lib/socialAuth";
 import { AuthInput } from "@/components/ui/AuthInput";
 import { PillButton } from "@/components/ui/PillButton";
 
@@ -45,12 +46,34 @@ export default function LoginScreen() {
     router.replace(isOnboardingComplete ? "/(tabs)" : "/(onboarding)/step-1-hook");
   }
 
-  function handleSocialPlaceholder() {
-    Toast.show({
-      type: "info",
-      text1: "Coming soon",
-      text2: "Social sign-in will be available in an upcoming update.",
-    });
+  async function handleApple() {
+    setIsLoading(true);
+    try {
+      const { error } = await signInWithApple();
+      if (error) Toast.show({ type: "error", text1: error.message });
+      // onAuthStateChange in _layout.tsx handles session + routing
+    } catch (e: any) {
+      if (e?.code !== "ERR_REQUEST_CANCELED") {
+        Toast.show({ type: "error", text1: e?.message ?? t("common.error") });
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function handleGoogle() {
+    setIsLoading(true);
+    try {
+      const { error } = await signInWithGoogle();
+      if (error) Toast.show({ type: "error", text1: error.message });
+      // onAuthStateChange in _layout.tsx handles session + routing
+    } catch (e: any) {
+      if (e?.code !== "SIGN_IN_CANCELLED") {
+        Toast.show({ type: "error", text1: e?.message ?? t("common.error") });
+      }
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   return (
@@ -141,20 +164,24 @@ export default function LoginScreen() {
 
             {/* Social buttons */}
             <View className="gap-3 mb-8">
-              <TouchableOpacity
-                onPress={handleSocialPlaceholder}
-                activeOpacity={0.7}
-                className="flex-row items-center justify-center gap-3 rounded-full border border-greige dark:border-brown-mid py-4 px-6"
-              >
-                <Ionicons name="logo-apple" size={20} color="#2A1800" />
-                <Text className="font-sans-medium text-base text-text-dark dark:text-text-light">
-                  {t("auth.apple")}
-                </Text>
-              </TouchableOpacity>
+              {Platform.OS === "ios" && (
+                <TouchableOpacity
+                  onPress={handleApple}
+                  activeOpacity={0.7}
+                  disabled={isLoading}
+                  className="flex-row items-center justify-center gap-3 rounded-full border border-greige dark:border-brown-mid py-4 px-6"
+                >
+                  <Ionicons name="logo-apple" size={20} color="#2A1800" />
+                  <Text className="font-sans-medium text-base text-text-dark dark:text-text-light">
+                    {t("auth.apple")}
+                  </Text>
+                </TouchableOpacity>
+              )}
 
               <TouchableOpacity
-                onPress={handleSocialPlaceholder}
+                onPress={handleGoogle}
                 activeOpacity={0.7}
+                disabled={isLoading}
                 className="flex-row items-center justify-center gap-3 rounded-full border border-greige dark:border-brown-mid py-4 px-6"
               >
                 <Ionicons name="logo-google" size={18} color="#2A1800" />

@@ -1,32 +1,32 @@
-import "../global.css";
-import "../i18n";
-import { useEffect } from "react";
-import { Stack } from "expo-router";
-import { StatusBar } from "expo-status-bar";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { SafeAreaProvider } from "react-native-safe-area-context";
-import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
-import Toast from "react-native-toast-message";
-import * as SplashScreen from "expo-splash-screen";
-import { useFonts } from "expo-font";
+import { toastConfig } from "@/components/toastConfig";
+import i18n from "@/i18n";
+import { initNotifications } from "@/lib/notifications";
+import {
+  configurePurchases,
+  identifyPurchasesUser,
+  resetPurchasesUser,
+} from "@/lib/purchases";
+import { startShieldEngine } from "@/lib/shieldEngine";
+import { supabase } from "@/lib/supabase";
+import { useAuthStore } from "@/store/auth";
+import { useUserStore } from "@/store/userStore";
 import {
   DMSans_400Regular,
   DMSans_500Medium,
   DMSans_700Bold,
 } from "@expo-google-fonts/dm-sans";
 import { DMSerifDisplay_400Regular } from "@expo-google-fonts/dm-serif-display";
-import { toastConfig } from "@/components/toastConfig";
-import { supabase } from "@/lib/supabase";
-import { useAuthStore } from "@/store/auth";
-import { useUserStore } from "@/store/userStore";
-import { startShieldEngine } from "@/lib/shieldEngine";
-import {
-  configurePurchases,
-  identifyPurchasesUser,
-  resetPurchasesUser,
-} from "@/lib/purchases";
-import { initNotifications } from "@/lib/notifications";
-import i18n from "@/i18n";
+import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
+import { useFonts } from "expo-font";
+import { Stack } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
+import { StatusBar } from "expo-status-bar";
+import { useEffect } from "react";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+import Toast from "react-native-toast-message";
+import "../global.css";
+import "../i18n";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -69,10 +69,9 @@ export default function RootLayout() {
       useAuthStore.getState().setSession(session);
 
       if (session?.user) {
-        useUserStore.getState().setUser(
-          session.user.id,
-          session.user.email ?? ""
-        );
+        useUserStore
+          .getState()
+          .setUser(session.user.id, session.user.email ?? "");
 
         // Tie RevenueCat purchases to this Supabase user ID
         identifyPurchasesUser(session.user.id);
@@ -113,3 +112,6 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
+
+// eas build --profile production --platform ios --auto-submit
+// eas build --platform ios --profile development
