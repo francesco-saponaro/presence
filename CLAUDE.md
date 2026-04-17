@@ -44,6 +44,8 @@
 5. **Native Module Bridging & Imports:** The project uses modern Expo where the New Architecture (newArchEnabled) is true by default. We are utilizing the interop layer for our custom native modules using the RCT_EXTERN_MODULE / RCT_EXTERN_METHOD ObjC bridge pattern. CRITICAL: Because of this, if a Swift file utilizes RCTPromiseResolveBlock or RCTPromiseRejectBlock, it MUST explicitly contain import React at the top of the Swift file, otherwise the EAS cloud compiler will fail.
 6. **Zod v4 API:** This project uses Zod v4. The `errorMap` option is renamed to `error`. Use `z.literal(true, { error: "..." })` not `{ errorMap: ... }`.
 7. **Native OAuth & Direct Sign-Up (Supabase):** Email confirmation must be **disabled** in the Supabase dashboard (`Auth > Providers > Email > Confirm email: OFF`) for direct sign-up to work. Do NOT use `supabase.auth.signInWithOAuth()` — it opens a web browser and kills UX. Use native OS popups instead: `expo-apple-authentication` (iOS only) → `supabase.auth.signInWithIdToken({ provider: 'apple', token: identityToken })`, and `@react-native-google-signin/google-signin` (both platforms) → `supabase.auth.signInWithIdToken({ provider: 'google', token: idToken })`. Shared logic lives in `lib/socialAuth.ts`. The Apple button must only render on `Platform.OS === 'ios'`. Google requires `webClientId` and `iosClientId` from Google Cloud Console configured in `lib/socialAuth.ts`.
+8. **TypeScript Asset Declarations (CRITICAL):**
+   When importing local static images (PNG, JPG, SVG, etc.) into TypeScript files, TS will throw a TS2307: Cannot find module error by default. You must ensure an app.d.ts (or declarations.d.ts) file exists in the root directory (next to package.json) containing the following module declarations. Do not attempt to fix image import errors by changing the import path; fix it by declaring the module
 
 ## 5. UI/UX & Brand Guidelines (The "Cappuccino" Palette)
 
@@ -200,6 +202,13 @@ These were discovered during development and must be respected:
 
 - Never instruct the user to "open Xcode" or "modify files in the ios/ folder."
 - You must act as if the ios/ and android/ folders are completely invisible. Every single native modification (adding files, tweaking Info.plist, editing AndroidManifest.xml) must be done exclusively via Expo Config Plugins inside the app.json plugins array.
+
+11. **Expo Router Deep Links — Use `useLocalSearchParams`, NOT `Linking.getInitialURL`:**
+   - Expo Router intercepts the deep link URL itself to handle navigation. By the time a screen mounts, `Linking.getInitialURL()` returns `null` and `Linking.addEventListener` never fires — the URL has already been consumed by the router.
+   - **CRITICAL:** To read query params from a deep link (e.g. `presence://reset-password?code=XXXX`), always use `useLocalSearchParams()` from `expo-router`. The router parses the URL and injects params directly as typed route params.
+   - This applies to ALL screens that need to read data from a deep link: password reset, OAuth callbacks, invite links, etc.
+   - Example: `const { code } = useLocalSearchParams<{ code?: string }>();` — then use in a `useEffect` that depends on `[code]`.
+   - Also: when `onAuthStateChange` fires `PASSWORD_RECOVERY` after `exchangeCodeForSession`, the `_layout.tsx` handler must return early and NOT propagate the session into Zustand — otherwise `index.tsx`'s routing effect re-runs and navigates the user away from the reset screen.
 
 ## 11. Pre-Launch Checklist (Before App Store Submission)
 

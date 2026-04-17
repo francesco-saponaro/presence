@@ -1,69 +1,59 @@
-import { useState, useEffect } from "react";
+import { AuthInput } from "@/components/ui/AuthInput";
+import { PillButton } from "@/components/ui/PillButton";
+import { supabase } from "@/lib/supabase";
+import { resetPasswordSchema, type ResetPasswordForm } from "@/lib/validation";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { router, useLocalSearchParams } from "expo-router";
+import { useEffect, useState } from "react";
+import { Controller, useForm } from "react-hook-form";
+import { useTranslation } from "react-i18next";
 import {
-  View,
-  Text,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Text,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router, useLocalSearchParams } from "expo-router";
-import { useForm, Controller } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useTranslation } from "react-i18next";
 import Toast from "react-native-toast-message";
-import * as Linking from "expo-linking";
-import { supabase } from "@/lib/supabase";
-import { resetPasswordSchema, type ResetPasswordForm } from "@/lib/validation";
-import { AuthInput } from "@/components/ui/AuthInput";
-import { PillButton } from "@/components/ui/PillButton";
 
 /**
  * Handles the password-reset deep link: presence://reset-password
  *
- * Supabase appends the recovery token as URL hash fragments:
- *   presence://reset-password#access_token=...&refresh_token=...&type=recovery
+ * PKCE flow (flowType: 'pkce' in lib/supabase.ts):
+ *   Supabase redirects with a ?code= query param.
+ *   We call supabase.auth.exchangeCodeForSession(url) to establish the session.
  *
- * We parse these, call supabase.auth.setSession(), then let the user set a new password.
+ * Implicit fallback (legacy):
+ *   presence://reset-password#access_token=...&refresh_token=...&type=recovery
+ *   We call supabase.auth.setSession() with the parsed tokens.
  */
 export default function ResetPasswordScreen() {
   const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
 
-  // Extract tokens from the deep-link URL on mount.
+  // Expo Router parses the deep link and passes ?code= as a route param.
+  // presence://reset-password?code=XXXX → { code: 'XXXX' }
+  const { code } = useLocalSearchParams<{ code?: string }>();
+
   useEffect(() => {
-    async function processDeepLink(url: string) {
-      // Hash fragment contains access_token & refresh_token
-      const parsed = Linking.parse(url);
-      const hash = (url.split("#")[1] ?? "");
-      const params = Object.fromEntries(new URLSearchParams(hash));
-
-      if (params.access_token && params.refresh_token) {
-        const { error } = await supabase.auth.setSession({
-          access_token: params.access_token,
-          refresh_token: params.refresh_token,
-        });
-        if (!error) setSessionReady(true);
-        else Toast.show({ type: "error", text1: error.message });
-      }
-    }
-
-    // App opened from a cold start via deep link
-    Linking.getInitialURL().then((url) => {
-      if (url) processDeepLink(url);
+    if (!code) return;
+    const authCode = Array.isArray(code) ? code[0] : code;
+    supabase.auth.exchangeCodeForSession(authCode).then(({ error }) => {
+      if (!error) setSessionReady(true);
+      else Toast.show({ type: "error", text1: error.message });
     });
+  }, [code]);
 
-    // App was foregrounded via deep link
-    const sub = Linking.addEventListener("url", ({ url }) => processDeepLink(url));
-    return () => sub.remove();
-  }, []);
-
-  const { control, handleSubmit, formState: { errors } } =
-    useForm<ResetPasswordForm>({
-      resolver: zodResolver(resetPasswordSchema),
-      defaultValues: { password: "", confirmPassword: "" },
-    });
+  const {
+    control,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<ResetPasswordForm>({
+    resolver: zodResolver(resetPasswordSchema),
+    defaultValues: { password: "", confirmPassword: "" },
+  });
 
   async function onSubmit({ password }: ResetPasswordForm) {
     if (!sessionReady) {
@@ -110,7 +100,11 @@ export default function ResetPasswordScreen() {
                   value={value}
                   onChangeText={onChange}
                   onBlur={onBlur}
-                  error={errors.password ? t(errors.password.message as string) : undefined}
+                  error={
+                    errors.password
+                      ? t(errors.password.message as string)
+                      : undefined
+                  }
                   isPassword
                   autoComplete="new-password"
                   placeholder="••••••••"
@@ -127,7 +121,11 @@ export default function ResetPasswordScreen() {
                   value={value}
                   onChangeText={onChange}
                   onBlur={onBlur}
-                  error={errors.confirmPassword ? t(errors.confirmPassword.message as string) : undefined}
+                  error={
+                    errors.confirmPassword
+                      ? t(errors.confirmPassword.message as string)
+                      : undefined
+                  }
                   isPassword
                   autoComplete="new-password"
                   placeholder="••••••••"
@@ -137,7 +135,11 @@ export default function ResetPasswordScreen() {
 
             <View className="mt-2">
               <PillButton
-                label={isLoading ? t("auth.updatingPassword") : t("auth.updatePassword")}
+                label={
+                  isLoading
+                    ? t("auth.updatingPassword")
+                    : t("auth.updatePassword")
+                }
                 variant="primary"
                 disabled={isLoading || !sessionReady}
                 onPress={handleSubmit(onSubmit)}

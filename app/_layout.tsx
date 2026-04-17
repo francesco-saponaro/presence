@@ -41,6 +41,15 @@ export default function RootLayout() {
     "DMSans-Bold": DMSans_700Bold,
   });
 
+  // useEffect(() => {
+  //   const nukeSession = async () => {
+  //     // ⚠️ TEMPORARY: Instantly log out on app start
+  //     await supabase.auth.signOut();
+  //     console.log("💣 Session Nuked!");
+  //   };
+  //   nukeSession();
+  // }, []);
+
   // Restore the user's saved language preference on every cold start.
   useEffect(() => {
     const savedLang = useUserStore.getState().language;
@@ -66,6 +75,11 @@ export default function RootLayout() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
+      // PASSWORD_RECOVERY is handled entirely inside reset-password.tsx.
+      // Propagating it here would cause index.tsx to re-route the user
+      // away from the reset screen mid-flow.
+      if (event === "PASSWORD_RECOVERY") return;
+
       useAuthStore.getState().setSession(session);
 
       if (session?.user) {

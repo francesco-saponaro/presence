@@ -1,39 +1,50 @@
-import { useState } from "react";
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
-import { useForm, Controller } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useTranslation } from "react-i18next";
-import Toast from "react-native-toast-message";
-import { Ionicons } from "@expo/vector-icons";
+import LogoPng from "@/assets/images/logo-app.png";
+import { AuthInput } from "@/components/ui/AuthInput";
+import { PillButton } from "@/components/ui/PillButton";
+import { signInWithApple, signInWithGoogle } from "@/lib/socialAuth";
 import { supabase } from "@/lib/supabase";
 import { loginSchema, type LoginForm } from "@/lib/validation";
 import { useOnboardingStore } from "@/store/onboardingStore";
-import { signInWithApple, signInWithGoogle } from "@/lib/socialAuth";
-import { AuthInput } from "@/components/ui/AuthInput";
-import { PillButton } from "@/components/ui/PillButton";
+import { Ionicons } from "@expo/vector-icons";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Image } from "expo-image";
+import { router } from "expo-router";
+import { useState } from "react";
+import { Controller, useForm } from "react-hook-form";
+import { useTranslation } from "react-i18next";
+import {
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import Toast from "react-native-toast-message";
 
 export default function LoginScreen() {
   const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(false);
-  const isOnboardingComplete = useOnboardingStore((s) => s.isOnboardingComplete);
+  const isOnboardingComplete = useOnboardingStore(
+    (s) => s.isOnboardingComplete,
+  );
 
-  const { control, handleSubmit, formState: { errors } } = useForm<LoginForm>({
+  const {
+    control,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
   });
 
   async function onSubmit({ email, password }: LoginForm) {
     setIsLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
     setIsLoading(false);
 
     if (error) {
@@ -43,7 +54,9 @@ export default function LoginScreen() {
 
     // onAuthStateChange in _layout.tsx updates Zustand session.
     // index.tsx will react and route to onboarding or tabs.
-    router.replace(isOnboardingComplete ? "/(tabs)" : "/(onboarding)/step-1-hook");
+    router.replace(
+      isOnboardingComplete ? "/(tabs)" : "/(onboarding)/step-1-hook",
+    );
   }
 
   async function handleApple() {
@@ -89,9 +102,16 @@ export default function LoginScreen() {
         >
           <View className="flex-1 px-6 pt-14 pb-8">
             {/* App name */}
-            <Text className="font-serif-display text-lg text-brown-mid dark:text-tan text-center mb-10 tracking-widest uppercase">
-              Presence
-            </Text>
+            <View className="flex-col items-center justify-center">
+              <Image
+                source={LogoPng}
+                style={{ width: 240, height: 80 }}
+                contentFit="cover"
+              />
+              <Text className="font-serif-display text-lg text-brown-mid dark:text-tan text-center mb-10 tracking-widest uppercase">
+                Presence
+              </Text>
+            </View>
 
             {/* Headline */}
             <Text className="font-serif-display text-4xl text-text-dark dark:text-text-light mb-2">
@@ -109,7 +129,9 @@ export default function LoginScreen() {
                   value={value}
                   onChangeText={onChange}
                   onBlur={onBlur}
-                  error={errors.email ? t(errors.email.message as string) : undefined}
+                  error={
+                    errors.email ? t(errors.email.message as string) : undefined
+                  }
                   keyboardType="email-address"
                   autoComplete="email"
                   placeholder="you@example.com"
@@ -126,7 +148,11 @@ export default function LoginScreen() {
                   value={value}
                   onChangeText={onChange}
                   onBlur={onBlur}
-                  error={errors.password ? t(errors.password.message as string) : undefined}
+                  error={
+                    errors.password
+                      ? t(errors.password.message as string)
+                      : undefined
+                  }
                   isPassword
                   autoComplete="password"
                   placeholder="••••••••"
@@ -196,7 +222,10 @@ export default function LoginScreen() {
               <Text className="font-sans-body text-sm text-brown-mid dark:text-greige">
                 {t("auth.noAccount")}
               </Text>
-              <TouchableOpacity onPress={() => router.push("/(auth)/signup")} activeOpacity={0.6}>
+              <TouchableOpacity
+                onPress={() => router.push("/(auth)/signup")}
+                activeOpacity={0.6}
+              >
                 <Text className="font-sans-bold text-sm text-brown-dark dark:text-tan underline">
                   {t("auth.signUpLink")}
                 </Text>
