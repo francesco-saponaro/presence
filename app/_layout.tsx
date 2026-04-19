@@ -1,6 +1,8 @@
 import { toastConfig } from "@/components/toastConfig";
 import i18n from "@/i18n";
+import { routeAfterAuth } from "@/lib/authRouting";
 import { initNotifications } from "@/lib/notifications";
+import { isInRecovery, storePendingResetUrl } from "@/lib/recoveryState";
 import {
   configurePurchases,
   identifyPurchasesUser,
@@ -18,9 +20,10 @@ import {
 import { DMSerifDisplay_400Regular } from "@expo-google-fonts/dm-serif-display";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { useFonts } from "expo-font";
-import { Stack } from "expo-router";
+import { router, Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
+import * as Linking from "expo-linking";
 import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -49,6 +52,22 @@ export default function RootLayout() {
   //   };
   //   nukeSession();
   // }, []);
+
+  // Capture password-reset deep-link URLs as early as possible — before Expo
+  // Router finishes navigation — so reset-password.tsx can always read them
+  // from recoveryState even if Linking.useURL() returns null on that screen.
+  useEffect(() => {
+    const capture = (url: string | null) => {
+      if (!url) return;
+      console.log("[_layout] Linking URL captured:", url);
+      if (url.includes("reset-password") && url.includes("#")) {
+        storePendingResetUrl(url);
+      }
+    };
+    Linking.getInitialURL().then(capture);
+    const sub = Linking.addEventListener("url", ({ url }) => capture(url));
+    return () => sub.remove();
+  }, []);
 
   // Restore the user's saved language preference on every cold start.
   useEffect(() => {
@@ -91,9 +110,18 @@ export default function RootLayout() {
         identifyPurchasesUser(session.user.id);
       }
 
+      // SIGNED_IN covers email, Apple, and Google auth — route to the
+      // correct screen based on onboarding / subscription state.
+      // Skip routing if reset-password.tsx is handling a recovery flow
+      // (calling setSession with a recovery token also fires SIGNED_IN).
+      if (event === "SIGNED_IN" && !isInRecovery()) {
+        routeAfterAuth();
+      }
+
       if (event === "SIGNED_OUT") {
         useUserStore.getState().clearUser();
         resetPurchasesUser();
+        router.replace("/(auth)/login" as any);
       }
     });
 

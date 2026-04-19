@@ -4,7 +4,6 @@ import { PillButton } from "@/components/ui/PillButton";
 import { signInWithApple, signInWithGoogle } from "@/lib/socialAuth";
 import { supabase } from "@/lib/supabase";
 import { loginSchema, type LoginForm } from "@/lib/validation";
-import { useOnboardingStore } from "@/store/onboardingStore";
 import { Ionicons } from "@expo/vector-icons";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Image } from "expo-image";
@@ -26,10 +25,6 @@ import Toast from "react-native-toast-message";
 export default function LoginScreen() {
   const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(false);
-  const isOnboardingComplete = useOnboardingStore(
-    (s) => s.isOnboardingComplete,
-  );
-
   const {
     control,
     handleSubmit,
@@ -51,12 +46,7 @@ export default function LoginScreen() {
       Toast.show({ type: "error", text1: error.message });
       return;
     }
-
-    // onAuthStateChange in _layout.tsx updates Zustand session.
-    // index.tsx will react and route to onboarding or tabs.
-    router.replace(
-      isOnboardingComplete ? "/(tabs)" : "/(onboarding)/step-1-hook",
-    );
+    // SIGNED_IN event in _layout.tsx handles routing.
   }
 
   async function handleApple() {
@@ -77,8 +67,7 @@ export default function LoginScreen() {
   async function handleGoogle() {
     setIsLoading(true);
     try {
-      const { error } = await signInWithGoogle();
-      if (error) Toast.show({ type: "error", text1: error.message });
+      await signInWithGoogle();
       // onAuthStateChange in _layout.tsx handles session + routing
     } catch (e: any) {
       if (e?.code !== "SIGN_IN_CANCELLED") {

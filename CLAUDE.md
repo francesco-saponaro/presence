@@ -43,7 +43,7 @@
 4. **Native Swift Bridges:** The native-src Architecture (CRITICAL): DO NOT write any files directly into the ios/ or android/ directories. Because this is an Expo project developed on Windows, those folders are ephemeral, wiped frequently, and ignored by Git. ALL custom native code (.swift, .m, .kt, .java) MUST be placed in a root directory named native-src/. You must then write an Expo Config Plugin (e.g., plugins/withSwiftFiles.js) to manually copy these files into the native directories during the EAS prebuild phase.
 5. **Native Module Bridging & Imports:** The project uses modern Expo where the New Architecture (newArchEnabled) is true by default. We are utilizing the interop layer for our custom native modules using the RCT_EXTERN_MODULE / RCT_EXTERN_METHOD ObjC bridge pattern. CRITICAL: Because of this, if a Swift file utilizes RCTPromiseResolveBlock or RCTPromiseRejectBlock, it MUST explicitly contain import React at the top of the Swift file, otherwise the EAS cloud compiler will fail.
 6. **Zod v4 API:** This project uses Zod v4. The `errorMap` option is renamed to `error`. Use `z.literal(true, { error: "..." })` not `{ errorMap: ... }`.
-7. **Native OAuth & Direct Sign-Up (Supabase):** Email confirmation must be **disabled** in the Supabase dashboard (`Auth > Providers > Email > Confirm email: OFF`) for direct sign-up to work. Do NOT use `supabase.auth.signInWithOAuth()` — it opens a web browser and kills UX. Use native OS popups instead: `expo-apple-authentication` (iOS only) → `supabase.auth.signInWithIdToken({ provider: 'apple', token: identityToken })`, and `@react-native-google-signin/google-signin` (both platforms) → `supabase.auth.signInWithIdToken({ provider: 'google', token: idToken })`. Shared logic lives in `lib/socialAuth.ts`. The Apple button must only render on `Platform.OS === 'ios'`. Google requires `webClientId` and `iosClientId` from Google Cloud Console configured in `lib/socialAuth.ts`.
+7. **OAuth & Direct Sign-Up (Supabase):** Email confirmation must be **disabled** in the Supabase dashboard (`Auth > Providers > Email > Confirm email: OFF`) for direct sign-up to work. Apple uses `expo-apple-authentication` → `signInWithIdToken`. Google uses `signInWithOAuth` + `expo-web-browser` + `exchangeCodeForSession` (see Section 6A for full detail). The Apple button must only render on `Platform.OS === 'ios'`. Add `presence://` and `presence://auth/callback` to Supabase `Auth > URL Configuration > Redirect URLs`.
 8. **TypeScript Asset Declarations (CRITICAL):**
    When importing local static images (PNG, JPG, SVG, etc.) into TypeScript files, TS will throw a TS2307: Cannot find module error by default. You must ensure an app.d.ts (or declarations.d.ts) file exists in the root directory (next to package.json) containing the following module declarations. Do not attempt to fix image import errors by changing the import path; fix it by declaring the module
 
@@ -65,10 +65,33 @@
 ### A. Authentication
 
 - Sign Up/Login (Email, Apple, Google).
-- **Native OAuth Libraries (CRITICAL):** Do NOT use `supabase.auth.signInWithOAuth()` because it kicks users to a web browser. You MUST use `expo-apple-authentication` and `@react-native-google-signin/google-signin` to trigger native OS-level biometric popups. Once the native token is received, authenticate with Supabase using `supabase.auth.signInWithIdToken()`.
+- **OAuth Strategy (per provider):**
+  - **Apple:** Use `expo-apple-authentication` (native Face ID / Touch ID popup, iOS only) → `supabase.auth.signInWithIdToken({ provider: 'apple', token: identityToken })`. No nonce needed.
+  - **Google:** Use `supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo, skipBrowserRedirect: true } })` + `WebBrowser.openAuthSessionAsync` (expo-web-browser). Build the redirect URI with `Linking.createURL(Platform.OS === 'ios' ? 'auth/callback' : '')`. On success, parse the `#access_token=...&refresh_token=...` hash fragment from the callback URL and call `supabase.auth.setSession({ access_token, refresh_token })` directly — do NOT call `exchangeCodeForSession` (that is PKCE-only and loses the code verifier in the mobile browser context). Do NOT set `flowType: 'pkce'` in the Supabase client — leave it at the default (implicit) so tokens are returned in the hash. Do NOT use `@react-native-google-signin/google-signin` — nonce mismatch errors make it unreliable with Supabase.
+  - **CRITICAL — `signInWithGoogle` returns `void`:** The function throws on error and calls `setSession` internally. Callers must `await signInWithGoogle()` without destructuring — do NOT do `const { error } = await signInWithGoogle()` as this crashes (`undefined.error`).
+  - Shared logic lives in `lib/socialAuth.ts`.
 - Must include a text linking to TOS and Privacy Policy.
 - Forgot Password (Supabase magic link/reset).
 - Keep Splash Screen (`expo-splash-screen`) visible until Auth session and i18n are fully loaded.
+
+#### Auth Routing Architecture (CRITICAL)
+
+All post-auth navigation is centralised in two places — never scatter `router.replace` across screens:
+
+1. **`lib/authRouting.ts` — `routeAfterAuth()`:** A plain function (no hooks) that reads Zustand state via `getState()` and calls `router.replace` to the correct screen. Logic: `!isOnboardingComplete` → step-N route, `!isSubscribed` → paywall, else → tabs. Import and call this wherever routing after auth is needed.
+
+2. **`app/_layout.tsx` — `onAuthStateChange` handler:** The single global listener that drives all auth-triggered navigation:
+   - `SIGNED_IN` → calls `routeAfterAuth()`. This fires for **all** sign-in methods (email, Apple, Google) so screens do NOT need their own `router.replace` after auth succeeds.
+   - `SIGNED_OUT` → clears user state and routes to `/(auth)/login`.
+   - `PASSWORD_RECOVERY` → early return (handled entirely in `reset-password.tsx`).
+   - `INITIAL_SESSION` → no routing here; `index.tsx` handles cold-start routing via its `useEffect`.
+
+3. **`app/index.tsx` — cold-start routing brain:** Waits for `authHydrated && onboardingHydrated`, then routes once based on stored state. Only relevant for `INITIAL_SESSION` (session restore on app launch). Does NOT fire for interactive sign-ins.
+
+**Rules:**
+- Login/signup screens must NOT call `router.replace` after social or email auth — `SIGNED_IN` handles it.
+- `signOut` callers (e.g. profile screen) may keep their own `router.replace("/(auth)/login")` for immediacy — the duplicate navigate to the same destination is harmless.
+- Never add a `SIGNED_IN` routing branch to `index.tsx` — that would double-navigate since `index.tsx` is still mounted during the very first sign-in on cold start.
 
 ### B. The Psychological Onboarding Flow (Strict Order)
 
@@ -154,7 +177,7 @@ To ensure the app feels native, robust, and cheat-proof, you must implement the 
 5. **Navigation Interception (Anti-Cheat & Hard Stops):**
    - **iOS (Swipe Back):** You MUST set `gestureEnabled: false` in the Expo Router `<Stack.Screen>` options for critical screens to prevent users from simply swiping left-to-right to escape.
    - **Android (Hardware Back):** Implement React Native's `BackHandler` to intercept and disable the physical/system back button.
-   - **Where to apply this:** 1. **The Hard Paywall:** Prevent backing out to access the app for free. 2. **Onboarding:** Prevent skipping crucial commitment steps. 3. **The Shield Screen:** When the Shield is active, the user must not be able to swipe or press back to dismiss it and return to the blocked app.
+   - **Where to apply this:** 1. **The Hard Paywall (step-7):** `gestureEnabled: false` (no swipe — prevents bypassing the paywall), but DOES have a visible back chevron button so the user can return to step-6. 2. **Onboarding step-1:** `gestureEnabled: false`, no back button — it's the entry point from auth, there is no previous slide. 3. **Onboarding steps 2–7:** `gestureEnabled: true` on 2–6 (swipe + button), step-7 gesture locked but button present. Each back handler calls `setCurrentStep(n-1)` then `router.back()`. 4. **The Shield Screen:** When the Shield is active, the user must not be able to swipe or press back to dismiss it and return to the blocked app.
 
 6. **Subscription Enforcement:** The routing brain (`app/index.tsx`) checks `isSubscribed` from `useUserStore`. If `isOnboardingComplete && !isSubscribed`, the user is routed back to the paywall (handles lapsed subscriptions). This state is synced by both the RevenueCat webhook (server) and the local purchase flow.
 
@@ -203,12 +226,23 @@ These were discovered during development and must be respected:
 - Never instruct the user to "open Xcode" or "modify files in the ios/ folder."
 - You must act as if the ios/ and android/ folders are completely invisible. Every single native modification (adding files, tweaking Info.plist, editing AndroidManifest.xml) must be done exclusively via Expo Config Plugins inside the app.json plugins array.
 
-11. **Expo Router Deep Links — Use `useLocalSearchParams`, NOT `Linking.getInitialURL`:**
-   - Expo Router intercepts the deep link URL itself to handle navigation. By the time a screen mounts, `Linking.getInitialURL()` returns `null` and `Linking.addEventListener` never fires — the URL has already been consumed by the router.
-   - **CRITICAL:** To read query params from a deep link (e.g. `presence://reset-password?code=XXXX`), always use `useLocalSearchParams()` from `expo-router`. The router parses the URL and injects params directly as typed route params.
-   - This applies to ALL screens that need to read data from a deep link: password reset, OAuth callbacks, invite links, etc.
-   - Example: `const { code } = useLocalSearchParams<{ code?: string }>();` — then use in a `useEffect` that depends on `[code]`.
-   - Also: when `onAuthStateChange` fires `PASSWORD_RECOVERY` after `exchangeCodeForSession`, the `_layout.tsx` handler must return early and NOT propagate the session into Zustand — otherwise `index.tsx`'s routing effect re-runs and navigates the user away from the reset screen.
+11. **Onboarding Back Navigation — Always Guard with `router.canGoBack()`:**
+   - On cold start, `index.tsx` routes directly to the persisted `currentStep`, meaning no navigation history exists. Calling `router.back()` on a screen with an empty stack throws `'GO_BACK' was not handled by any navigator`.
+   - Every `handleBack()` in onboarding (steps 2–7) must use: `if (router.canGoBack()) router.back(); else router.replace("/(onboarding)/step-N-name");`
+   - The `replace` target is always the explicit route for `currentStep - 1`. This pattern applies to any multi-step flow where the user can re-enter mid-flow from a persisted state.
+
+12. **Password Reset Deep Link — Architecture (CRITICAL):**
+   - In implicit flow (current default, no `flowType: 'pkce'`), Supabase redirects to: `presence://reset-password#access_token=...&refresh_token=...&type=recovery`
+   - **Hash fragments are NOT exposed via `useLocalSearchParams`** — only `?query` params are. The tokens live in the `#` fragment.
+   - **`Linking.useURL()` / `Linking.getInitialURL()` alone are unreliable** in screens mounted after Expo Router's navigation completes — by that point the URL event may have already been consumed.
+   - **The working solution uses `lib/recoveryState.ts` as a bridge:**
+     1. `_layout.tsx` (mounts first, before navigation) subscribes to `Linking.getInitialURL()` AND `Linking.addEventListener` in a `useEffect`. If the URL contains `reset-password` and `#`, it calls `storePendingResetUrl(url)`.
+     2. `reset-password.tsx` calls `consumePendingResetUrl()` on mount (reads and clears the stored URL). It also tries `Linking.getInitialURL()` and `Linking.useURL()` as additional fallbacks, taking whichever is non-null first.
+     3. Hash tokens are parsed, then `setInRecovery(true)` is set BEFORE calling `supabase.auth.setSession()`. This is critical — `setSession` fires `SIGNED_IN`, which `_layout.tsx` would otherwise handle by calling `routeAfterAuth()` and navigating away. The flag suppresses that routing.
+     4. On `setSession` success: `setSessionReady(true)` directly (no `PASSWORD_RECOVERY` event dependency — timing is unreliable).
+     5. PKCE fallback: if `?code=` param is present, `exchangeCodeForSession(code)` is called instead.
+     6. Unmount cleanup: `setInRecovery(false)`. Also called explicitly in `onSubmit` before routing to login.
+   - `detectSessionInUrl` has no effect on native — Supabase's JS client checks `isBrowser()` internally and skips URL detection on React Native. Keep it as `Platform.OS === "web"`.
 
 ## 11. Pre-Launch Checklist (Before App Store Submission)
 

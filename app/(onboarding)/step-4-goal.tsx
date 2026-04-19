@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, Platform } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useTranslation } from "react-i18next";
+import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import {
   BottomSheetModal,
@@ -56,6 +57,12 @@ export default function Step4Goal() {
     sheetRef.current?.dismiss();
   }
 
+  function handleBack() {
+    setCurrentStep(3);
+    if (router.canGoBack()) router.back();
+    else router.replace("/(onboarding)/step-3-shift");
+  }
+
   function handleNext() {
     // Convert local time to UTC ISO string for storage
     setBlockTime(selectedTime.toISOString());
@@ -66,8 +73,13 @@ export default function Step4Goal() {
 
   return (
     <SafeAreaView className="flex-1 bg-milk dark:bg-espresso">
-      <View className="px-6 pt-4">
-        <OnboardingProgress current={4} total={7} />
+      <View className="px-6 pt-4 flex-row items-center gap-3">
+        <TouchableOpacity onPress={handleBack} activeOpacity={0.6} hitSlop={8}>
+          <Ionicons name="chevron-back" size={22} color="#705E46" />
+        </TouchableOpacity>
+        <View className="flex-1">
+          <OnboardingProgress current={4} total={7} />
+        </View>
       </View>
 
       <View className="flex-1 px-6 justify-center">
@@ -113,7 +125,7 @@ export default function Step4Goal() {
         <Text className="font-sans-medium text-sm text-brown-mid dark:text-greige text-center mb-4">
           {t("onboarding.step4.frequencyLabel")}
         </Text>
-        <View className="flex-row gap-3 justify-center">
+        <View className="gap-3">
           {FREQ_KEYS.map(({ key, i18n }) => (
             <PillButton
               key={key}
@@ -121,7 +133,6 @@ export default function Step4Goal() {
               variant="outline"
               selected={frequency === key}
               onPress={() => setFrequencyLocal(key)}
-              style={{ flex: 1 }}
             />
           ))}
         </View>

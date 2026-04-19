@@ -16,9 +16,9 @@ export default function Step1Hook() {
   const setCurrentStep = useOnboardingStore((s) => s.setCurrentStep);
   const [selected, setSelected] = useState<string | null>(null);
 
-  function handleNext() {
-    if (!selected) return;
-    setSurveyAnswer(selected);
+  function handleSelect(key: string) {
+    setSelected(key);
+    setSurveyAnswer(key);
     setCurrentStep(2);
     router.push("/(onboarding)/step-2-reality");
   }
@@ -61,23 +61,11 @@ export default function Step1Hook() {
               label={t(`onboarding.step1.${key}`)}
               variant="outline"
               selected={selected === key}
-              onPress={() => setSelected(key)}
+              onPress={() => handleSelect(key)}
             />
           ))}
         </View>
       </ScrollView>
-
-      {/* CTA */}
-      <View
-        className="px-6 pb-8 pt-4 border-t border-surface-light dark:border-surface-dark"
-      >
-        <PillButton
-          label={t("common.continue")}
-          variant="primary"
-          disabled={!selected}
-          onPress={handleNext}
-        />
-      </View>
     </SafeAreaView>
   );
 }

@@ -1,8 +1,13 @@
 import { AuthInput } from "@/components/ui/AuthInput";
 import { PillButton } from "@/components/ui/PillButton";
+import {
+  consumePendingResetUrl,
+  setInRecovery,
+} from "@/lib/recoveryState";
 import { supabase } from "@/lib/supabase";
 import { resetPasswordSchema, type ResetPasswordForm } from "@/lib/validation";
 import { zodResolver } from "@hookform/resolvers/zod";
+import * as Linking from "expo-linking";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
@@ -17,32 +22,86 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import Toast from "react-native-toast-message";
 
-/**
- * Handles the password-reset deep link: presence://reset-password
- *
- * PKCE flow (flowType: 'pkce' in lib/supabase.ts):
- *   Supabase redirects with a ?code= query param.
- *   We call supabase.auth.exchangeCodeForSession(url) to establish the session.
- *
- * Implicit fallback (legacy):
- *   presence://reset-password#access_token=...&refresh_token=...&type=recovery
- *   We call supabase.auth.setSession() with the parsed tokens.
- */
 export default function ResetPasswordScreen() {
   const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
 
-  // Expo Router parses the deep link and passes ?code= as a route param.
-  // presence://reset-password?code=XXXX → { code: 'XXXX' }
+  // PKCE fallback: ?code= query param
   const { code } = useLocalSearchParams<{ code?: string }>();
 
+  // Reactive deep-link URL (covers background-resume case)
+  const deepLinkUrl = Linking.useURL();
+
+  // Clear the recovery flag whenever this screen unmounts
+  useEffect(() => {
+    return () => setInRecovery(false);
+  }, []);
+
+  // Primary: try URL captured by _layout.tsx (most reliable — runs before
+  // Expo Router finishes navigation). Falls back to Linking.useURL() and
+  // then to Linking.getInitialURL().
+  useEffect(() => {
+    const tryUrls = async () => {
+      const stored = consumePendingResetUrl();
+      const initial = await Linking.getInitialURL();
+      const reactive = deepLinkUrl;
+
+      console.log("[reset-password] stored url:", stored);
+      console.log("[reset-password] getInitialURL:", initial);
+      console.log("[reset-password] useURL:", reactive);
+      console.log("[reset-password] code param:", code);
+
+      const url = stored ?? initial ?? reactive;
+      if (url) handleUrl(url);
+    };
+    tryUrls();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLinkUrl]);
+
+  function handleUrl(url: string) {
+    console.log("[reset-password] handleUrl:", url);
+    const hashIndex = url.indexOf("#");
+    if (hashIndex !== -1) {
+      const params = new URLSearchParams(url.slice(hashIndex + 1));
+      const accessToken = params.get("access_token");
+      const refreshToken = params.get("refresh_token");
+      const type = params.get("type");
+      console.log("[reset-password] hash tokens:", { accessToken: !!accessToken, refreshToken: !!refreshToken, type });
+      if (accessToken && refreshToken && type === "recovery") {
+        setInRecovery(true);
+        supabase.auth
+          .setSession({ access_token: accessToken, refresh_token: refreshToken })
+          .then(({ error }) => {
+            console.log("[reset-password] setSession error:", error);
+            if (error) {
+              setInRecovery(false);
+              Toast.show({ type: "error", text1: error.message });
+            } else {
+              setSessionReady(true);
+            }
+          });
+        return;
+      }
+    }
+    // No hash tokens — log so we can see what format the URL is
+    console.log("[reset-password] no recovery hash found in url:", url);
+  }
+
+  // PKCE fallback: exchange ?code= for a session
   useEffect(() => {
     if (!code) return;
     const authCode = Array.isArray(code) ? code[0] : code;
+    console.log("[reset-password] exchanging code:", authCode);
+    setInRecovery(true);
     supabase.auth.exchangeCodeForSession(authCode).then(({ error }) => {
-      if (!error) setSessionReady(true);
-      else Toast.show({ type: "error", text1: error.message });
+      console.log("[reset-password] exchangeCodeForSession error:", error);
+      if (error) {
+        setInRecovery(false);
+        Toast.show({ type: "error", text1: error.message });
+      } else {
+        setSessionReady(true);
+      }
     });
   }, [code]);
 
@@ -69,6 +128,7 @@ export default function ResetPasswordScreen() {
       return;
     }
 
+    setInRecovery(false);
     Toast.show({ type: "success", text1: t("auth.passwordUpdated") });
     await supabase.auth.signOut();
     router.replace("/(auth)/login");

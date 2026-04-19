@@ -1,8 +1,9 @@
-import { View, Text, ScrollView } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { useTranslation } from "react-i18next";
+import { Ionicons } from "@expo/vector-icons";
 import { useOnboardingStore } from "@/store/onboardingStore";
 import { OnboardingProgress } from "@/components/ui/OnboardingProgress";
 import { PillButton } from "@/components/ui/PillButton";
@@ -11,6 +12,12 @@ export default function Step3Shift() {
   const { t } = useTranslation();
   const setCurrentStep = useOnboardingStore((s) => s.setCurrentStep);
 
+  function handleBack() {
+    setCurrentStep(2);
+    if (router.canGoBack()) router.back();
+    else router.replace("/(onboarding)/step-2-reality");
+  }
+
   function handleNext() {
     setCurrentStep(4);
     router.push("/(onboarding)/step-4-goal");
@@ -18,8 +25,13 @@ export default function Step3Shift() {
 
   return (
     <SafeAreaView className="flex-1 bg-milk dark:bg-espresso">
-      <View className="px-6 pt-4">
-        <OnboardingProgress current={3} total={7} />
+      <View className="px-6 pt-4 flex-row items-center gap-3">
+        <TouchableOpacity onPress={handleBack} activeOpacity={0.6} hitSlop={8}>
+          <Ionicons name="chevron-back" size={22} color="#705E46" />
+        </TouchableOpacity>
+        <View className="flex-1">
+          <OnboardingProgress current={3} total={7} />
+        </View>
       </View>
 
       <ScrollView

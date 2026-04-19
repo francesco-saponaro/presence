@@ -17,7 +17,6 @@ import Toast from "react-native-toast-message";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { signupSchema, type SignupForm } from "@/lib/validation";
-import { useOnboardingStore } from "@/store/onboardingStore";
 import { signInWithApple, signInWithGoogle } from "@/lib/socialAuth";
 import { AuthInput } from "@/components/ui/AuthInput";
 import { PillButton } from "@/components/ui/PillButton";
@@ -28,8 +27,6 @@ const PRIVACY_URL = "https://presence.app/privacy";
 export default function SignupScreen() {
   const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(false);
-  const isOnboardingComplete = useOnboardingStore((s) => s.isOnboardingComplete);
-
   const { control, handleSubmit, formState: { errors }, watch, setValue } =
     useForm<SignupForm>({
       resolver: zodResolver(signupSchema),
@@ -49,8 +46,7 @@ export default function SignupScreen() {
     }
 
     if (data.session) {
-      // Email confirmation is disabled in Supabase — signed in immediately.
-      router.replace(isOnboardingComplete ? "/(tabs)" : "/(onboarding)/step-1-hook");
+      // Email confirmation is disabled — SIGNED_IN event in _layout.tsx handles routing.
     } else {
       // Email confirmation is still enabled — prompt them to check their inbox.
       Toast.show({
@@ -80,8 +76,7 @@ export default function SignupScreen() {
   async function handleGoogle() {
     setIsLoading(true);
     try {
-      const { error } = await signInWithGoogle();
-      if (error) Toast.show({ type: "error", text1: error.message });
+      await signInWithGoogle();
       // onAuthStateChange in _layout.tsx handles session + routing
     } catch (e: any) {
       // User cancelled the Google picker — stay silent

@@ -1,47 +1,71 @@
-// import { supabase } from "@/lib/supabase";
-// import { GoogleSignin } from "@react-native-google-signin/google-signin";
-// import * as AppleAuthentication from "expo-apple-authentication";
-// import { Platform } from "react-native";
+import { supabase } from "@/lib/supabase";
+import * as AppleAuthentication from "expo-apple-authentication";
+import * as Linking from "expo-linking";
+import * as WebBrowser from "expo-web-browser";
+import { Platform } from "react-native";
 
-// // Replace PLACEHOLDER values with real IDs from Google Cloud Console.
-// // webClientId  → OAuth 2.0 → Web client (used by Supabase to validate tokens)
-// // iosClientId  → OAuth 2.0 → iOS client
-// GoogleSignin.configure({
-//   webClientId:
-//     "477480292838-5ovvpdscor002ah4rat6kcfdhtjlls1b.apps.googleusercontent.com",
-//   iosClientId:
-//     "477480292838-crt7tbqla5dtt3uosfefjvbc7lbebnk8.apps.googleusercontent.com",
-// });
+// ── Apple Sign-In (native OS popup via expo-apple-authentication) ──────────────
+export async function signInWithApple() {
+  if (Platform.OS !== "ios")
+    throw new Error("Apple Sign-In is only available on iOS.");
 
-// export async function signInWithApple() {
-//   if (Platform.OS !== "ios")
-//     throw new Error("Apple Sign-In is only available on iOS.");
+  const credential = await AppleAuthentication.signInAsync({
+    requestedScopes: [
+      AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+      AppleAuthentication.AppleAuthenticationScope.EMAIL,
+    ],
+  });
 
-//   const credential = await AppleAuthentication.signInAsync({
-//     requestedScopes: [
-//       AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-//       AppleAuthentication.AppleAuthenticationScope.EMAIL,
-//     ],
-//   });
+  const { identityToken } = credential;
+  if (!identityToken)
+    throw new Error("Apple Sign-In did not return an identity token.");
 
-//   const { identityToken } = credential;
-//   if (!identityToken)
-//     throw new Error("Apple Sign-In did not return an identity token.");
+  return supabase.auth.signInWithIdToken({
+    provider: "apple",
+    token: identityToken,
+  });
+}
 
-//   return supabase.auth.signInWithIdToken({
-//     provider: "apple",
-//     token: identityToken,
-//   });
-// }
+// ── Google Sign-In (web OAuth via expo-web-browser) ───────────────────────────
+export async function signInWithGoogle() {
+  const redirectUri = Linking.createURL(
+    Platform.OS === "ios" ? "auth/callback" : "",
+  );
 
-// export async function signInWithGoogle() {
-//   await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
-//   const userInfo = await GoogleSignin.signIn();
-//   const idToken = userInfo.data?.idToken;
-//   if (!idToken) throw new Error("Google Sign-In did not return an ID token.");
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: redirectUri,
+      skipBrowserRedirect: true,
+    },
+  });
 
-//   return supabase.auth.signInWithIdToken({
-//     provider: "google",
-//     token: idToken,
-//   });
-// }
+  if (error || !data?.url) throw new Error(error?.message ?? "OAuth error");
+
+  const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUri);
+
+  if (result.type === "success") {
+    // Implicit flow returns tokens in the URL hash fragment (#access_token=...&refresh_token=...)
+    const url = result.url;
+    const hashIndex = url.indexOf("#");
+    if (hashIndex !== -1) {
+      const params = new URLSearchParams(url.slice(hashIndex + 1));
+      const accessToken = params.get("access_token");
+      const refreshToken = params.get("refresh_token");
+      if (accessToken && refreshToken) {
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+        if (sessionError) throw sessionError;
+        console.log(sessionError, "PKCE exchange error");
+        return;
+      }
+    }
+    // Fallback: try PKCE code exchange if hash parsing yields nothing
+    const { error: sessionError } =
+      await supabase.auth.exchangeCodeForSession(url);
+    console.log(sessionError, "PKCE exchange error");
+    if (sessionError) throw sessionError;
+  }
+}

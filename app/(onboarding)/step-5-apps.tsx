@@ -3,6 +3,7 @@ import { View, Text, FlatList, TouchableOpacity } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useTranslation } from "react-i18next";
+import { Ionicons } from "@expo/vector-icons";
 import { useOnboardingStore } from "@/store/onboardingStore";
 import { useRoutineStore } from "@/store/routine";
 import { OnboardingProgress } from "@/components/ui/OnboardingProgress";
@@ -34,6 +35,12 @@ export default function Step5Apps() {
     });
   }
 
+  function handleBack() {
+    setCurrentStep(4);
+    if (router.canGoBack()) router.back();
+    else router.replace("/(onboarding)/step-4-goal");
+  }
+
   function handleNext() {
     setBlockedApps(
       ALL_APPS.filter((a) => selected.has(a.id)).map((a) => a.name)
@@ -44,8 +51,13 @@ export default function Step5Apps() {
 
   return (
     <SafeAreaView className="flex-1 bg-milk dark:bg-espresso">
-      <View className="px-6 pt-4">
-        <OnboardingProgress current={5} total={7} />
+      <View className="px-6 pt-4 flex-row items-center gap-3">
+        <TouchableOpacity onPress={handleBack} activeOpacity={0.6} hitSlop={8}>
+          <Ionicons name="chevron-back" size={22} color="#705E46" />
+        </TouchableOpacity>
+        <View className="flex-1">
+          <OnboardingProgress current={5} total={7} />
+        </View>
       </View>
 
       {/* Header */}

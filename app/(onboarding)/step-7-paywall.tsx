@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
-import { View, Text, ScrollView, ActivityIndicator, Alert, Linking } from "react-native";
+import { View, Text, ScrollView, ActivityIndicator, Alert, Linking, TouchableOpacity } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { useTranslation } from "react-i18next";
+import { Ionicons } from "@expo/vector-icons";
 import type { PurchasesPackage } from "react-native-purchases";
 import { useOnboardingStore } from "@/store/onboardingStore";
 import { useUserStore } from "@/store/userStore";
@@ -25,7 +26,14 @@ export default function Step7Paywall() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const completeOnboarding = useOnboardingStore((s) => s.completeOnboarding);
+  const setCurrentStep = useOnboardingStore((s) => s.setCurrentStep);
   const setSubscribed = useUserStore((s) => s.setSubscribed);
+
+  function handleBack() {
+    setCurrentStep(6);
+    if (router.canGoBack()) router.back();
+    else router.replace("/(onboarding)/step-6-permissions");
+  }
 
   const [pkg, setPkg] = useState<PurchasesPackage | null>(null);
   const [loadingOffering, setLoadingOffering] = useState(true);
@@ -119,8 +127,13 @@ export default function Step7Paywall() {
 
   return (
     <SafeAreaView className="flex-1 bg-espresso">
-      <View className="px-6 pt-4">
-        <OnboardingProgress current={7} total={7} />
+      <View className="px-6 pt-4 flex-row items-center gap-3">
+        <TouchableOpacity onPress={handleBack} activeOpacity={0.6} hitSlop={8}>
+          <Ionicons name="chevron-back" size={22} color="#705E46" />
+        </TouchableOpacity>
+        <View className="flex-1">
+          <OnboardingProgress current={7} total={7} />
+        </View>
       </View>
 
       <ScrollView

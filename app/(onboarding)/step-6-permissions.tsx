@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { View, Text, Switch, ScrollView, Platform, Alert } from "react-native";
+import { View, Text, Switch, ScrollView, Platform, Alert, TouchableOpacity } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useTranslation } from "react-i18next";
+import { Ionicons } from "@expo/vector-icons";
 import * as Notifications from "expo-notifications";
 import * as ImagePicker from "expo-image-picker";
 import { useOnboardingStore } from "@/store/onboardingStore";
@@ -117,6 +118,12 @@ export default function Step6Permissions() {
     setGranted((prev) => ({ ...prev, [key]: ok }));
   }
 
+  function handleBack() {
+    setCurrentStep(5);
+    if (router.canGoBack()) router.back();
+    else router.replace("/(onboarding)/step-5-apps");
+  }
+
   function handleNext() {
     setCurrentStep(7);
     router.push("/(onboarding)/step-7-paywall");
@@ -124,8 +131,13 @@ export default function Step6Permissions() {
 
   return (
     <SafeAreaView className="flex-1 bg-milk dark:bg-espresso">
-      <View className="px-6 pt-4">
-        <OnboardingProgress current={6} total={7} />
+      <View className="px-6 pt-4 flex-row items-center gap-3">
+        <TouchableOpacity onPress={handleBack} activeOpacity={0.6} hitSlop={8}>
+          <Ionicons name="chevron-back" size={22} color="#705E46" />
+        </TouchableOpacity>
+        <View className="flex-1">
+          <OnboardingProgress current={6} total={7} />
+        </View>
       </View>
 
       <ScrollView
