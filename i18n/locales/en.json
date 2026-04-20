@@ -49,29 +49,49 @@
   },
   "onboarding": {
     "step1": {
-      "label": "Step 1 of 7",
+      "label": "Step 1 of 9",
       "question": "How does sending memes make you feel?",
       "opt1": "Disconnected",
       "opt2": "Guilty",
       "opt3": "Numb",
-      "opt4": "Nothing, honestly"
+      "opt4": "Nothing, honestly",
+      "opt5": "Exhausted",
+      "opt6": "Empty"
     },
     "step2": {
-      "label": "Step 2 of 7",
+      "label": "Step 2 of 9",
       "headline": "You're not alone.",
       "subhead": "The average person sends 47 meaningless messages a week.",
-      "body": "But every reaction you send is a minute you didn't spend on something real."
+      "body": "Every reaction you send is a minute you didn't spend on something real.",
+      "stat1": "47",
+      "stat1Label": "meaningless\nmessages a week",
+      "stat2": "82",
+      "stat2Label": "days a year\nstaring at a screen",
+      "stat3": "13",
+      "stat3Label": "years of your life\ngone to the feed"
     },
     "step3": {
-      "label": "Step 3 of 7",
-      "headline": "What if your phone blocked the noise...",
-      "subhead": "...until you sent a real message to someone who matters?",
-      "body": "Presence replaces the habit with something that actually fills the void."
+      "label": "Step 3 of 9",
+      "headline": "Stop substituting memes for real conversations.",
+      "subhead": "The people in your life deserve more than a forwarded meme.",
+      "body": "Presence gives your phone a conscience — one that won't let you hide behind the feed."
+    },
+    "step4how": {
+      "label": "Step 4 of 9",
+      "title": "Here's how it works.",
+      "subtitle": "Three steps. Real connection. Every day.",
+      "step1Title": "Lock",
+      "step1Desc": "Your chosen apps lock automatically at your set time.",
+      "step2Title": "Connect",
+      "step2Desc": "Send a genuine message to one of your trusted contacts.",
+      "step3Title": "Screenshot",
+      "step3Desc": "Capture the conversation — both the message and the date must be clearly visible.",
+      "hint": "Tip: make sure the screenshot is well-lit and easy to read."
     },
     "step4": {
-      "label": "Step 4 of 7",
-      "title": "Set your block time.",
-      "subtitle": "Tap the time to change it.",
+      "label": "Step 5 of 9",
+      "title": "When should Presence protect you?",
+      "subtitle": "Your apps lock at this time every day. You unlock them by reaching out to someone real.",
       "frequencyLabel": "How often?",
       "daily": "Daily",
       "fiveX": "5x a week",
@@ -79,14 +99,25 @@
       "sheetTitle": "Choose a time",
       "sheetConfirm": "Confirm"
     },
+    "step6contacts": {
+      "label": "Step 6 of 9",
+      "title": "Who keeps you grounded?",
+      "subtitle": "Add the people you commit to reaching out to. They are your way out.",
+      "placeholder": "Type a name...",
+      "add": "Add",
+      "hint": "Each time your apps are blocked, you'll need to message one of these people to unlock them.",
+      "ocrNote": "When you upload a screenshot, we'll verify that one of these names appears in the conversation.",
+      "changeLater": "You can add or remove contacts at any time from your profile.",
+      "empty": "Add at least one person to continue."
+    },
     "step5": {
-      "label": "Step 5 of 7",
+      "label": "Step 7 of 9",
       "title": "Which apps distract you most?",
       "subtitle": "Select the ones Presence will shield.",
       "selectHint": "Select at least one to continue."
     },
     "step6": {
-      "label": "Step 6 of 7",
+      "label": "Step 8 of 9",
       "title": "A few permissions needed.",
       "subtitle": "Presence only uses these to run the shield.",
       "screenTime": "Screen Time",
@@ -99,18 +130,21 @@
       "photoLibraryDesc": "Upload your proof of genuine connection."
     },
     "step7": {
-      "label": "Step 7 of 7",
-      "title": "Start living presently.",
-      "social": "Join thousands who chose real over viral.",
+      "label": "Step 9 of 9",
+      "title": "Your real life is waiting.",
+      "social": "The cost of staying stuck is higher than any subscription.",
+      "benefit1": "Your apps lock. Your focus returns.",
+      "benefit2": "Proven connections tracked and celebrated.",
+      "benefit3": "Streaks and insights that keep you honest.",
+      "benefit4": "The only app that demands real connection.",
       "planLabel": "Full access. One price.",
       "price": "$49.99",
       "period": "/ year",
-      "trial": "7-day free trial included",
-      "cta": "Start Free Trial",
+      "cta": "Unlock Presence",
       "restore": "Restore Purchases",
       "terms": "Terms of Service",
       "privacy": "Privacy Policy",
-      "disclaimer": "Cancel anytime. Billed annually."
+      "disclaimer": "Billed annually. Cancel anytime."
     }
   },
   "home": {
@@ -147,6 +181,13 @@
     "manageRoutine": "Block Time",
     "frequency": "Frequency",
     "blockedApps": "Blocked Apps",
+    "trustedContacts": "Trusted Contacts",
+    "trustedContactsCount": "{{count}} contacts",
+    "trustedContactsSheet": "Your Trusted Contacts",
+    "trustedContactsHint": "These names will be searched in your proof screenshots.",
+    "trustedContactsEmpty": "No contacts added yet.",
+    "trustedContactsPlaceholder": "Type a name...",
+    "trustedContactsAdd": "Add",
     "language": "Language",
     "notSet": "Not set",
     "feedback": "Feedback & Contact",

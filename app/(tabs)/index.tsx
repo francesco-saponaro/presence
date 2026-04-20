@@ -31,6 +31,7 @@ export default function HomeScreen() {
 
   const blockTimeUtc = useRoutineStore((s) => s.blockTimeUtc);
   const frequency = useRoutineStore((s) => s.frequency);
+  const trustedContacts = useRoutineStore((s) => s.trustedContacts);
 
   const connections = useUserStore((s) => s.lifetimeSuccessfulConnections);
 
@@ -68,7 +69,7 @@ export default function HomeScreen() {
     const uri = result.assets[0].uri;
     setIsVerifying(true);
 
-    const validation = await runOCRValidation(uri);
+    const validation = await runOCRValidation(uri, trustedContacts);
     setIsVerifying(false);
 
     if (validation.valid) {

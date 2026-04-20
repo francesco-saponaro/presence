@@ -1,15 +1,18 @@
 import Foundation
 import FamilyControls
 import ManagedSettings
-import React // Fixes the missing RCTPromise block errors
+import React // Required for RCTPromiseResolveBlock / RCTPromiseRejectBlock
 
 @objc(PresenceScreenTime)
 public class PresenceScreenTime: NSObject {
-    
-    let store = ManagedSettingsStore()
-    
+
+    private let store = ManagedSettingsStore()
+
+    // ── Authorization ─────────────────────────────────────────────────────────
+
     @objc
-    public func requestAuthorization(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+    public func requestAuthorization(_ resolve: @escaping RCTPromiseResolveBlock,
+                                     reject: @escaping RCTPromiseRejectBlock) {
         if #available(iOS 15.0, *) {
             AuthorizationCenter.shared.requestAuthorization { result in
                 switch result {
@@ -22,5 +25,45 @@ public class PresenceScreenTime: NSObject {
         } else {
             reject("UNSUPPORTED", "FamilyControls requires iOS 15.0 or newer", nil as Error?)
         }
+    }
+
+    // ── Shield management ─────────────────────────────────────────────────────
+
+    /**
+     Shields the given apps by their bundle identifiers.
+     Requires iOS 16+ for per-app targeting via Application(bundleIdentifier:).
+     The FamilyControls authorization must already have been granted via
+     requestAuthorization before calling this.
+     */
+    @objc
+    public func applyShield(_ bundleIds: [String],
+                             resolve: @escaping RCTPromiseResolveBlock,
+                             reject: @escaping RCTPromiseRejectBlock) {
+        guard #available(iOS 16.0, *) else {
+            reject("UNSUPPORTED", "App-specific shielding requires iOS 16.0 or newer", nil as Error?)
+            return
+        }
+
+        let tokens = Set(
+            bundleIds
+                .compactMap { Application(bundleIdentifier: $0) }
+                .map { $0.token }
+        )
+
+        // Setting to nil when empty ensures we never leave a stale empty-set shield.
+        store.shield.applications = tokens.isEmpty ? nil : tokens
+        resolve(nil)
+    }
+
+    /**
+     Removes all application and category shields from the ManagedSettingsStore.
+     Safe to call even when no shield is active.
+     */
+    @objc
+    public func clearShield(_ resolve: @escaping RCTPromiseResolveBlock,
+                             reject: @escaping RCTPromiseRejectBlock) {
+        store.shield.applications = nil
+        store.shield.applicationCategories = nil
+        resolve(nil)
     }
 }

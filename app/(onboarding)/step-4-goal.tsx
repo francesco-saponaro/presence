@@ -58,17 +58,17 @@ export default function Step4Goal() {
   }
 
   function handleBack() {
-    setCurrentStep(3);
+    setCurrentStep(4);
     if (router.canGoBack()) router.back();
-    else router.replace("/(onboarding)/step-3-shift");
+    else router.replace("/(onboarding)/step-4-how");
   }
 
   function handleNext() {
     // Convert local time to UTC ISO string for storage
     setBlockTime(selectedTime.toISOString());
     setFrequency(frequency);
-    setCurrentStep(5);
-    router.push("/(onboarding)/step-5-apps");
+    setCurrentStep(6);
+    router.push("/(onboarding)/step-6-contacts");
   }
 
   return (
@@ -78,7 +78,7 @@ export default function Step4Goal() {
           <Ionicons name="chevron-back" size={22} color="#705E46" />
         </TouchableOpacity>
         <View className="flex-1">
-          <OnboardingProgress current={4} total={7} />
+          <OnboardingProgress current={5} total={9} />
         </View>
       </View>
 

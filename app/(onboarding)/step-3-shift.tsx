@@ -20,7 +20,7 @@ export default function Step3Shift() {
 
   function handleNext() {
     setCurrentStep(4);
-    router.push("/(onboarding)/step-4-goal");
+    router.push("/(onboarding)/step-4-how");
   }
 
   return (
@@ -30,7 +30,7 @@ export default function Step3Shift() {
           <Ionicons name="chevron-back" size={22} color="#705E46" />
         </TouchableOpacity>
         <View className="flex-1">
-          <OnboardingProgress current={3} total={7} />
+          <OnboardingProgress current={3} total={9} />
         </View>
       </View>
 
@@ -41,20 +41,24 @@ export default function Step3Shift() {
         <View className="w-full items-center mt-6 mb-8">
           <Image
             source={require("@/assets/images/onboarding-3.png")}
-            style={{ width: "100%", height: 260 }}
+            style={{ width: "100%", height: 240 }}
             contentFit="contain"
           />
         </View>
 
-        <Text className="font-sans-medium text-xs tracking-widest text-greige text-center uppercase mb-3">
+        <Text className="font-sans-medium text-xs tracking-widest text-greige text-center uppercase mb-4">
           {t("onboarding.step3.label")}
         </Text>
 
-        <Text className="font-serif-display text-3xl text-text-dark dark:text-text-light text-center px-8 leading-snug mb-4">
+        {/* Large, dominant headline */}
+        <Text className="font-serif-display text-4xl text-text-dark dark:text-text-light text-center px-6 leading-tight mb-6">
           {t("onboarding.step3.headline")}
         </Text>
 
-        <Text className="font-sans-medium text-lg text-brown-mid text-center px-8 mb-4">
+        {/* Separator accent */}
+        <View className="self-center w-12 h-1 rounded-full bg-tan mb-6" />
+
+        <Text className="font-sans-medium text-lg text-brown-mid dark:text-greige text-center px-8 mb-5 leading-snug">
           {t("onboarding.step3.subhead")}
         </Text>
 

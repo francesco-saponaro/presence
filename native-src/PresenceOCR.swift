@@ -7,7 +7,7 @@ import React // Fixes the missing RCTPromise block errors
 public class PresenceOCR: NSObject {
     
     @objc
-    public func scanImage(_ imagePath: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+    public func recognizeText(_ imagePath: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         guard let image = UIImage(contentsOfFile: imagePath),
               let cgImage = image.cgImage else {
             reject("IMAGE_ERROR", "Could not load image at path", nil as Error?) // Fixes the 'nil' error

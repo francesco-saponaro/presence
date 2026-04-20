@@ -31,15 +31,20 @@ create policy "profiles: owner update"
 -- One row per user storing their block time, frequency, and blocked app list.
 
 create table if not exists public.routines (
-  id            uuid primary key default gen_random_uuid(),
-  user_id       uuid not null unique references public.profiles(id) on delete cascade,
-  block_time    time not null default '20:00:00',
-  frequency     text not null default 'daily'
-                  check (frequency in ('daily', '5x', 'weekends')),
-  blocked_apps  text[] not null default '{}',
-  created_at    timestamptz not null default now(),
-  updated_at    timestamptz not null default now()
+  id               uuid primary key default gen_random_uuid(),
+  user_id          uuid not null unique references public.profiles(id) on delete cascade,
+  block_time       time not null default '20:00:00',
+  frequency        text not null default 'daily'
+                     check (frequency in ('daily', '5x', 'weekends')),
+  blocked_apps     text[] not null default '{}',
+  trusted_contacts text[] not null default '{}',
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now()
 );
+
+-- Migration for existing databases: add trusted_contacts if the table already exists
+-- Run this manually in the Supabase SQL Editor if the table was created before this column was added:
+-- alter table public.routines add column if not exists trusted_contacts text[] not null default '{}';
 
 alter table public.routines enable row level security;
 

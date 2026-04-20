@@ -8,6 +8,8 @@ import { useOnboardingStore } from "@/store/onboardingStore";
 import { OnboardingProgress } from "@/components/ui/OnboardingProgress";
 import { PillButton } from "@/components/ui/PillButton";
 
+const STATS = ["stat1", "stat2", "stat3"] as const;
+
 export default function Step2Reality() {
   const { t } = useTranslation();
   const setCurrentStep = useOnboardingStore((s) => s.setCurrentStep);
@@ -30,7 +32,7 @@ export default function Step2Reality() {
           <Ionicons name="chevron-back" size={22} color="#705E46" />
         </TouchableOpacity>
         <View className="flex-1">
-          <OnboardingProgress current={2} total={7} />
+          <OnboardingProgress current={2} total={9} />
         </View>
       </View>
 
@@ -42,7 +44,7 @@ export default function Step2Reality() {
         <View className="w-full items-center mt-6 mb-8">
           <Image
             source={require("@/assets/images/onboarding-2.png")}
-            style={{ width: "100%", height: 260 }}
+            style={{ width: "100%", height: 240 }}
             contentFit="contain"
           />
         </View>
@@ -51,15 +53,39 @@ export default function Step2Reality() {
           {t("onboarding.step2.label")}
         </Text>
 
-        <Text className="font-serif-display text-3xl text-text-dark dark:text-text-light text-center px-8 leading-snug mb-4">
+        <Text className="font-serif-display text-3xl text-text-dark dark:text-text-light text-center px-8 leading-snug mb-3">
           {t("onboarding.step2.headline")}
         </Text>
 
-        <Text className="font-sans-medium text-lg text-brown-mid text-center px-8 mb-4">
+        <Text className="font-sans-medium text-base text-brown-mid text-center px-8 mb-8">
           {t("onboarding.step2.subhead")}
         </Text>
 
-        <Text className="font-sans-body text-base text-brown-mid dark:text-greige text-center px-10 leading-relaxed">
+        {/* Stat cards */}
+        <View className="flex-row px-6 gap-3 mb-8">
+          {STATS.map((key) => (
+            <View
+              key={key}
+              className="flex-1 bg-surface-light dark:bg-surface-dark rounded-3xl px-3 py-5 items-center border border-greige/40 dark:border-brown-mid/40"
+              style={{
+                shadowColor: "#422701",
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.07,
+                shadowRadius: 12,
+                elevation: 3,
+              }}
+            >
+              <Text className="font-serif-display text-4xl text-brown-dark dark:text-tan mb-1">
+                {t(`onboarding.step2.${key}`)}
+              </Text>
+              <Text className="font-sans-body text-xs text-brown-mid dark:text-greige text-center leading-snug">
+                {t(`onboarding.step2.${key}Label`)}
+              </Text>
+            </View>
+          ))}
+        </View>
+
+        <Text className="font-sans-body text-sm text-brown-mid dark:text-greige text-center px-10 leading-relaxed">
           {t("onboarding.step2.body")}
         </Text>
       </ScrollView>

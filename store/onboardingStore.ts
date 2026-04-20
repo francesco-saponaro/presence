@@ -2,12 +2,12 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { storage } from "@/lib/storage";
 
-// Steps 1-7 map to the 7 onboarding screens.
+// Steps 1-9 map to the 9 onboarding screens.
 // currentStep tracks the furthest step reached so the user
 // can resume if they background the app mid-onboarding.
 interface OnboardingState {
   isOnboardingComplete: boolean;
-  currentStep: number; // 1–7
+  currentStep: number; // 1–9
   surveyAnswer: string | null; // step 1 answer
   _hasHydrated: boolean;
   setCurrentStep: (step: number) => void;
@@ -26,7 +26,7 @@ export const useOnboardingStore = create<OnboardingState>()(
       _hasHydrated: false,
       setCurrentStep: (step) => set({ currentStep: step }),
       setSurveyAnswer: (answer) => set({ surveyAnswer: answer }),
-      completeOnboarding: () => set({ isOnboardingComplete: true, currentStep: 7 }),
+      completeOnboarding: () => set({ isOnboardingComplete: true, currentStep: 9 }),
       resetOnboarding: () =>
         set({ isOnboardingComplete: false, currentStep: 1, surveyAnswer: null }),
       setHasHydrated: (val) => set({ _hasHydrated: val }),

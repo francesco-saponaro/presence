@@ -3,14 +3,15 @@
  *
  * OCR validation logic for connection-proof screenshots.
  *
- * Three rules (all must pass):
- *   1. Effort  — more than 4 words of text exist in the screenshot.
- *   2. Context — at least one messaging-app UI indicator is present.
- *   3. Recency — a time reference suggesting the conversation is recent.
+ * Four rules (all must pass):
+ *   1. Effort   — more than 4 words of text exist in the screenshot.
+ *   2. Context  — at least one messaging-app UI indicator is present.
+ *   3. Recency  — a time reference suggesting the conversation is recent.
+ *   4. Contact  — at least one trusted contact name appears in the text
+ *                 (only enforced when trustedContacts is non-empty).
  *
- * We intentionally do NOT look for specific personal keywords.
- * The goal is to confirm a real messaging session happened today, not to
- * read private content.
+ * Rule 4 keeps the user honest: they must screenshot a conversation with
+ * one of the specific people they committed to during onboarding.
  *
  * After two consecutive failures the UI shows a "Manual bypass" option.
  */
@@ -66,9 +67,24 @@ const RECENCY_PATTERNS: RegExp[] = [
   /\byesterday\b/i,
 ];
 
+// ── Rule 4: trusted contact name ─────────────────────────────────────────────
+
+/**
+ * Returns true if at least one of the trusted contact names appears
+ * (case-insensitive) anywhere in the OCR text.
+ * Always returns true when no contacts have been configured yet.
+ */
+function hasContactName(lower: string, contacts: string[]): boolean {
+  if (contacts.length === 0) return true;
+  return contacts.some((name) => lower.includes(name.toLowerCase().trim()));
+}
+
 // ── Core validator ───────────────────────────────────────────────────────────
 
-export function validateOCRText(text: string): OCRValidationResult {
+export function validateOCRText(
+  text: string,
+  trustedContacts: string[] = []
+): OCRValidationResult {
   if (!text || text.trim().length === 0) {
     return {
       valid: false,
@@ -95,9 +111,8 @@ export function validateOCRText(text: string): OCRValidationResult {
   // Rule 3 – recency
   const hasRecency = RECENCY_PATTERNS.some((re) => re.test(text));
 
-  // Require both context AND recency (or allow one if the other is very strong)
-  // We use a permissive OR to avoid trapping valid users:
-  // If there are 20+ words AND at least one of context/recency → accept.
+  // Require both context AND recency (or allow one if the other is very strong).
+  // Permissive OR: 20+ words AND at least one of context/recency → accept.
   const isLongConversation = words.length >= 20;
 
   if (!hasContext && !hasRecency) {
@@ -116,6 +131,15 @@ export function validateOCRText(text: string): OCRValidationResult {
     };
   }
 
+  // Rule 4 – trusted contact name
+  if (!hasContactName(lower, trustedContacts)) {
+    return {
+      valid: false,
+      reason: "no_contact_name",
+      rawText: text,
+    };
+  }
+
   return { valid: true, rawText: text };
 }
 
@@ -125,10 +149,13 @@ export function validateOCRText(text: string): OCRValidationResult {
  * Run native OCR on an image file and validate the extracted text.
  * Safe to call on web (returns valid:false with reason "unavailable").
  */
-export async function runOCRValidation(imagePath: string): Promise<OCRValidationResult> {
+export async function runOCRValidation(
+  imagePath: string,
+  trustedContacts: string[] = []
+): Promise<OCRValidationResult> {
   try {
     const text = await OCRModule.recognizeText(imagePath);
-    return validateOCRText(text);
+    return validateOCRText(text, trustedContacts);
   } catch {
     return { valid: false, reason: "ocr_error" };
   }

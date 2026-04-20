@@ -95,24 +95,41 @@ All post-auth navigation is centralised in two places — never scatter `router.
 
 ### B. The Psychological Onboarding Flow (Strict Order)
 
-1. **The Hook:** Survey ("How does sending memes... make you feel?"). Uses Onboarding Image 1.
-2. **The Reality Check:** Data projection graph (Result vs. Average). Uses Onboarding Image 2.
-3. **The Paradigm Shift:** The pitch to replace the habit. Uses Onboarding Image 3.
-4. **Goal Setting (Commitment):** - Use `@react-native-community/datetimepicker` for the time selection (e.g., 8:00 PM).
-   - **CRITICAL UI:** Do not just render a raw picker on the screen. The picker must be presented inside a premium, beautifully styled `@gorhom/bottom-sheet` or a custom NativeWind card that matches the Cappuccino palette. It must feel like a deliberate, high-end interaction.
-   - Frequency selector: Daily, 5x, Weekends.
-5. **App Selection:** List of apps with checkboxes to apply the Shield.
-6. **Permissions Hell (Handled Gracefully):** - **UI:** Four prominent toggle buttons requesting: 1) Screen Time / Usage Access, 2) Notifications, 3) Activity Tracking, 4) Photo Library.
-   - **Cross-Platform Logic (What happens when toggled):**
-     - **iOS:** Routes to Apple's native prompt for `FamilyControls`, push notifications, and photo gallery access.
-     - **Android (CRITICAL):** Routes the user to the deep OS settings to grant `PACKAGE_USAGE_STATS` (Usage Access) and `SYSTEM_ALERT_WINDOW` (Draw Over Other Apps), alongside standard notification/storage prompts. **You MUST also explicitly prompt the user to disable Battery Optimization (`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`)**, otherwise Android will kill the background blocker service. **CRITICAL UI:** Because Android's permission screens are confusing, use clean Lottie animations or local GIFs above the toggles to visually show Android users exactly which OS buttons they need to press.
-7. **The Hard Paywall:** "Before vs. After" graph. Yearly plan via RevenueCat. Must include "Restore Purchases", TOS, Privacy Policy links. Uses Onboarding Image 4.
+**Total: 9 steps.** The flow is emotionally engineered — each screen builds psychological pressure before releasing it at the paywall.
+
+**File → Logical Step mapping** (filenames were not renamed to preserve routes):
+- `step-1-hook` → Step 1, `step-2-reality` → Step 2, `step-3-shift` → Step 3
+- `step-4-how` → Step 4 *(new)*, `step-4-goal` → Step 5, `step-6-contacts` → Step 6 *(new)*
+- `step-5-apps` → Step 7, `step-6-permissions` → Step 8, `step-7-paywall` → Step 9
+
+1. **The Hook** (`step-1-hook`) — Survey: "How does sending memes make you feel?" — **6 options:** Disconnected, Guilty, Numb, Nothing honestly, **Exhausted, Empty**. Tapping any option auto-advances. Uses Onboarding Image 1.
+
+2. **The Reality Check** (`step-2-reality`) — Data projection graph + **3 stat cards** displayed prominently: **47** meaningless messages/week · **82** days/year staring at a screen · **13** years of their life gone to the feed. Uses Onboarding Image 2.
+
+3. **The Paradigm Shift** (`step-3-shift`) — Dominant `text-4xl` serif headline with a tan accent divider for visual weight. New copy: *"Stop substituting memes for real conversations."* Uses Onboarding Image 3.
+
+4. **How It Works** (`step-4-how`) — *New step.* Visual + text walkthrough of the core loop using 3 numbered cards: **Lock** (apps lock at your set time) → **Connect** (message a trusted contact) → **Screenshot** (capture the conversation — message AND date must be visible). Includes a warm tip callout: *"Make sure the screenshot is well-lit and easy to read."* Uses Onboarding Image 1 as a boilerplate placeholder — replace with a final asset.
+
+5. **Block Time Setting** (`step-4-goal`) — Use `@react-native-community/datetimepicker` for time selection. **CRITICAL UI:** The picker must live inside a premium `@gorhom/bottom-sheet`. Copy frames it around the app's purpose: *"When should Presence protect you? Your apps lock at this time. You unlock them by reaching out to someone real."* Frequency selector: Daily, 5x, Weekends.
+
+6. **Trusted Contacts** (`step-6-contacts`) — *New step.* User adds any number of people they commit to reaching out to (no upper limit). Implemented as a text input + "Add" button (no `expo-contacts` dependency — names are for psychological commitment and OCR validation, not technical lookup). Shows avatar-initial chips for each added contact with a remove button. Requires at least 1 contact to proceed. Stores names in `useRoutineStore` → `trustedContacts: string[]`.
+   - Screen tells the user two things explicitly: (1) these names will be searched in their proof screenshots, and (2) they can add/remove contacts from their profile at any time.
+   - **Profile management:** The Profile screen has a "Trusted Contacts" row in the Routine section. Tapping it opens a `BottomSheetModal` where contacts can be added or removed. Every change is immediately persisted to Zustand AND synced to Supabase via `lib/routineSync.ts → syncContactsToSupabase()`.
+   - **Supabase:** `routines.trusted_contacts text[] not null default '{}'`. Run the migration comment in `supabase/schema.sql` on existing databases.
+
+7. **App Selection** (`step-5-apps`) — List of social apps with checkboxes. Select the ones Presence will shield. Requires at least 1 selection. Same as before.
+
+8. **Permissions** (`step-6-permissions`) — Four toggle rows: 1) Screen Time / Usage Access, 2) Notifications, 3) Activity Tracking, 4) Photo Library.
+   - **iOS:** Routes to Apple's native prompt for `FamilyControls`, push notifications, and photo gallery access.
+   - **Android (CRITICAL):** Routes to deep OS settings for `PACKAGE_USAGE_STATS` and `SYSTEM_ALERT_WINDOW`. Must also prompt to disable Battery Optimization (`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`). Use Lottie animations or GIFs to guide Android users through the OS screens.
+
+9. **The Hard Paywall** (`step-7-paywall`) — Emotional headline (*"Your real life is waiting."*) + social proof line + **4 benefit rows** with checkmarks + price card. **No free trial.** CTA: *"Unlock Presence."* Yearly plan via RevenueCat. Must include "Restore Purchases", TOS, Privacy Policy links. Uses Onboarding Image 4.
 
 ### C. Main Dashboard (Bottom Tabs)
 
 - **Tab 1 (Home):** Status indicator (Blocked/Unblocked). Countdown budget. Big "Upload Connection Proof" button when blocked.
 - **Tab 2 (Analytics):** Genuine Connections Made, Current Streak, Time Reclaimed. Warm empty state illustration if stats are 0.
-- **Tab 3 (Profile):** Manage routine, blocked apps, Language picker, Feedback/Contact button, Terms/Privacy links, Log Out/Delete Account.
+- **Tab 3 (Profile):** Manage routine, blocked apps, Language picker, Feedback/Contact button, Terms/Privacy links, Log Out/Delete Account. **Trusted Contacts** row lives in the Routine section — tapping it opens a `BottomSheetModal` (`snapPoints: ["70%"]`) where contacts can be added (text input) or removed (×). Every change is immediately written to Zustand and synced to Supabase via `syncContactsToSupabase()`.
 - **Footer:** Must include Copyright info, Logo, and "Manage Subscription" (RevenueCat customer portal).
 
 ### D. The Core Engine (Native OCR & Shield)
@@ -122,17 +139,19 @@ All post-auth navigation is centralised in two places — never scatter `router.
 - **The Proof:** `expo-image-picker` passes the screenshot to the native modules.
   - **iOS:** Uses Apple `VNRecognizeTextRequest`.
   - **Android:** Uses Google `ML Kit Vision` API.
-- **Validation Rules:**
-  1. _Context:_ Looks like a messaging app UI (bubbles, "Send", "Message").
-  2. _Recency:_ Timestamp indicates today ("Today", current time).
-  3. _Effort:_ Text block > 4 words. Do NOT look for specific keywords; verify substantial conversational text exists.
+- **Validation Rules** (all implemented in `lib/ocr.ts → validateOCRText(text, trustedContacts)`):
+  1. _Effort:_ Text block > 4 words.
+  2. _Context:_ At least one messaging-app UI indicator present (bubbles, "Send", "Message", app names, etc.).
+  3. _Recency:_ Timestamp indicates today or recent ("Today", current time, day name).
+  4. _Contact name:_ At least one name from `trustedContacts` appears (case-insensitive) in the OCR text. **This is the key rule** — it enforces that the screenshot is from a conversation with one of the specific people the user committed to. Skipped if `trustedContacts` is empty (e.g. legacy users).
   - **The Relief Valve (CRITICAL UX):** If the OCR fails to verify a screenshot _twice in a row_, the UI must present a "Manual Bypass" button. If the user clicks this, allow them through the Shield (unblock apps) but log the bypass in Supabase. Do not trap a paying user out of their phone due to a vision glitch.
     -- **Result:** Success triggers haptics + unblocks Shield. Failure shows elegant toast ("We couldn't verify this connection...").
 - **App Rating Strategy (CRITICAL):** Use `expo-store-review` to trigger the native App Store rating prompt. You must ONLY trigger this immediately after a successful OCR verification (while the user is in a high-dopamine state), and ONLY on the user's exactly 3rd lifetime successful connection. Do not spam them early on.
 
 ## 7. Backend & Services Integration
 
-- **Supabase:** Schema must track user profiles, connection proof successes (stats), and selected routines. See `supabase/schema.sql` for the full schema. Edge functions live in `supabase/functions/`.
+- **Supabase:** Schema must track user profiles, connection proof successes (stats), and selected routines. See `supabase/schema.sql` for the full schema. Edge functions live in `supabase/functions/`. The `routines` table has a `trusted_contacts text[] not null default '{}'` column — run the migration on existing databases: `alter table public.routines add column if not exists trusted_contacts text[] not null default '{}';`
+- **`lib/routineSync.ts`:** Two helpers for writing routine data to Supabase: `syncRoutineToSupabase()` — full upsert of all routine fields (blockTime, frequency, apps, trustedContacts); `syncContactsToSupabase(contacts)` — targeted UPDATE of only `trusted_contacts`, falling back to a full upsert if no row exists yet. Call `syncContactsToSupabase` whenever contacts change (onboarding completion and profile edits).
 - **RevenueCat:** Handle paywall offerings, execute purchases, check entitlements. API keys are configured in `lib/purchases.ts`. The entitlement ID is `"premium"`. RevenueCat user is identified by Supabase user ID via `Purchases.logIn(userId)`.
 - **Edge Functions:** Four functions deployed via `supabase functions deploy <name>`:
   - `delete-account` — admin-deletes the auth user (cascades all DB rows).
@@ -177,7 +196,7 @@ To ensure the app feels native, robust, and cheat-proof, you must implement the 
 5. **Navigation Interception (Anti-Cheat & Hard Stops):**
    - **iOS (Swipe Back):** You MUST set `gestureEnabled: false` in the Expo Router `<Stack.Screen>` options for critical screens to prevent users from simply swiping left-to-right to escape.
    - **Android (Hardware Back):** Implement React Native's `BackHandler` to intercept and disable the physical/system back button.
-   - **Where to apply this:** 1. **The Hard Paywall (step-7):** `gestureEnabled: false` (no swipe — prevents bypassing the paywall), but DOES have a visible back chevron button so the user can return to step-6. 2. **Onboarding step-1:** `gestureEnabled: false`, no back button — it's the entry point from auth, there is no previous slide. 3. **Onboarding steps 2–7:** `gestureEnabled: true` on 2–6 (swipe + button), step-7 gesture locked but button present. Each back handler calls `setCurrentStep(n-1)` then `router.back()`. 4. **The Shield Screen:** When the Shield is active, the user must not be able to swipe or press back to dismiss it and return to the blocked app.
+   - **Where to apply this:** 1. **The Hard Paywall (`step-7-paywall`, logical step 9):** `gestureEnabled: false` (no swipe — prevents bypassing the paywall), but DOES have a visible back chevron button so the user can return to step 8 (permissions). 2. **Onboarding step 1 (`step-1-hook`):** `gestureEnabled: false`, no back button — it's the entry point from auth, there is no previous slide. 3. **Onboarding steps 2–8:** `gestureEnabled: true` (swipe + back button). Each back handler calls `setCurrentStep(n-1)` then `router.back()`. 4. **The Shield Screen:** When the Shield is active, the user must not be able to swipe or press back to dismiss it and return to the blocked app.
 
 6. **Subscription Enforcement:** The routing brain (`app/index.tsx`) checks `isSubscribed` from `useUserStore`. If `isOnboardingComplete && !isSubscribed`, the user is routed back to the paywall (handles lapsed subscriptions). This state is synced by both the RevenueCat webhook (server) and the local purchase flow.
 
@@ -228,8 +247,9 @@ These were discovered during development and must be respected:
 
 11. **Onboarding Back Navigation — Always Guard with `router.canGoBack()`:**
    - On cold start, `index.tsx` routes directly to the persisted `currentStep`, meaning no navigation history exists. Calling `router.back()` on a screen with an empty stack throws `'GO_BACK' was not handled by any navigator`.
-   - Every `handleBack()` in onboarding (steps 2–7) must use: `if (router.canGoBack()) router.back(); else router.replace("/(onboarding)/step-N-name");`
-   - The `replace` target is always the explicit route for `currentStep - 1`. This pattern applies to any multi-step flow where the user can re-enter mid-flow from a persisted state.
+   - Every `handleBack()` in onboarding (steps 2–9) must use: `if (router.canGoBack()) router.back(); else router.replace("/(onboarding)/<previous-screen-filename>");`
+   - The `replace` target is always the explicit route for the previous logical step. Remember that logical step numbers no longer match filenames (e.g. logical step 5 lives in `step-4-goal.tsx`). Always reference the actual filename in the replace call, not a computed step number.
+   - This pattern applies to any multi-step flow where the user can re-enter mid-flow from a persisted state.
 
 12. **Password Reset Deep Link — Architecture (CRITICAL):**
    - In implicit flow (current default, no `flowType: 'pkce'`), Supabase redirects to: `presence://reset-password#access_token=...&refresh_token=...&type=recovery`
@@ -260,6 +280,8 @@ These items must be completed before submitting to App Store / Play Store:
 - [ ] **Supabase OAuth providers:** Enable Apple and Google providers in Supabase `Auth > Providers`. No redirect URL configuration needed (native `signInWithIdToken` flow, no browser redirect).
 - [ ] **Google Sign-In client IDs:** Replace `PLACEHOLDER_WEB_CLIENT_ID` and `PLACEHOLDER_IOS_CLIENT_ID` in `lib/socialAuth.ts` and `app.json` with real values from Google Cloud Console (OAuth 2.0 Client IDs).
 - [ ] **Supabase URL/keys:** Verify `lib/supabase.ts` has the production Supabase project URL and anon key.
+- [ ] **Trusted contacts DB migration:** Run `alter table public.routines add column if not exists trusted_contacts text[] not null default '{}';` on the existing Supabase database before deploying.
+- [ ] **Replace placeholder image in step-4-how:** `step-4-how.tsx` uses `onboarding-1.png` as a boilerplate. Replace with a dedicated final asset.
 - [ ] **App Store assets:** Icon, screenshots, description, age rating, privacy nutrition labels.
 - [ ] **Android Play Store:** Content rating questionnaire; privacy policy URL; target API level 34+.
 

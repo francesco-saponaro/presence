@@ -8,7 +8,7 @@ import { useOnboardingStore } from "@/store/onboardingStore";
 import { OnboardingProgress } from "@/components/ui/OnboardingProgress";
 import { PillButton } from "@/components/ui/PillButton";
 
-const OPTIONS_KEYS = ["opt1", "opt2", "opt3", "opt4"] as const;
+const OPTIONS_KEYS = ["opt1", "opt2", "opt3", "opt4", "opt5", "opt6"] as const;
 
 export default function Step1Hook() {
   const { t } = useTranslation();
@@ -27,7 +27,7 @@ export default function Step1Hook() {
     <SafeAreaView className="flex-1 bg-milk dark:bg-espresso">
       {/* Progress */}
       <View className="px-6 pt-4">
-        <OnboardingProgress current={1} total={7} />
+        <OnboardingProgress current={1} total={9} />
       </View>
 
       <ScrollView
@@ -38,7 +38,7 @@ export default function Step1Hook() {
         <View className="w-full items-center mt-6 mb-8">
           <Image
             source={require("@/assets/images/onboarding-1.png")}
-            style={{ width: "100%", height: 260 }}
+            style={{ width: "100%", height: 240 }}
             contentFit="contain"
           />
         </View>

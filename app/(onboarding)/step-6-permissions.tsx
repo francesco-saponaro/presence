@@ -119,13 +119,13 @@ export default function Step6Permissions() {
   }
 
   function handleBack() {
-    setCurrentStep(5);
+    setCurrentStep(7);
     if (router.canGoBack()) router.back();
     else router.replace("/(onboarding)/step-5-apps");
   }
 
   function handleNext() {
-    setCurrentStep(7);
+    setCurrentStep(9);
     router.push("/(onboarding)/step-7-paywall");
   }
 
@@ -136,7 +136,7 @@ export default function Step6Permissions() {
           <Ionicons name="chevron-back" size={22} color="#705E46" />
         </TouchableOpacity>
         <View className="flex-1">
-          <OnboardingProgress current={6} total={7} />
+          <OnboardingProgress current={8} total={9} />
         </View>
       </View>
 

@@ -1,5 +1,13 @@
 import { useState, useEffect } from "react";
-import { View, Text, ScrollView, ActivityIndicator, Alert, Linking, TouchableOpacity } from "react-native";
+import {
+  View,
+  Text,
+  ScrollView,
+  ActivityIndicator,
+  Alert,
+  Linking,
+  TouchableOpacity,
+} from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { router } from "expo-router";
@@ -17,10 +25,12 @@ import {
   extractEntitlement,
 } from "@/lib/purchases";
 import { supabase } from "@/lib/supabase";
+import { syncRoutineToSupabase } from "@/lib/routineSync";
 
-// Terms / Privacy URLs — update to real hosted pages before App Store submission
 const TOS_URL = "https://presence.app/terms";
 const PRIVACY_URL = "https://presence.app/privacy";
+
+const BENEFIT_KEYS = ["benefit1", "benefit2", "benefit3", "benefit4"] as const;
 
 export default function Step7Paywall() {
   const { t } = useTranslation();
@@ -30,7 +40,7 @@ export default function Step7Paywall() {
   const setSubscribed = useUserStore((s) => s.setSubscribed);
 
   function handleBack() {
-    setCurrentStep(6);
+    setCurrentStep(8);
     if (router.canGoBack()) router.back();
     else router.replace("/(onboarding)/step-6-permissions");
   }
@@ -46,13 +56,10 @@ export default function Step7Paywall() {
       .finally(() => setLoadingOffering(false));
   }, []);
 
-  // Shared post-purchase flow
   async function handlePurchaseSuccess(expiresAt: string | null) {
-    // Persist subscription state locally
     setSubscribed(true, expiresAt);
     completeOnboarding();
 
-    // Optimistically update Supabase profile (webhook will also do this)
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       await supabase
@@ -63,7 +70,10 @@ export default function Step7Paywall() {
         })
         .eq("id", user.id);
 
-      // Trigger welcome email (best-effort)
+      // Persist all routine data (block time, frequency, apps, contacts) collected
+      // during onboarding to Supabase now that we have a confirmed user.
+      syncRoutineToSupabase().catch(() => {});
+
       supabase.functions
         .invoke("welcome-email", { body: { email: user.email } })
         .catch(() => {});
@@ -87,7 +97,6 @@ export default function Step7Paywall() {
         );
       }
     } catch (e: any) {
-      // User cancelled — PurchasesErrorCode.purchaseCancelledError
       if (e?.userCancelled) return;
       Alert.alert(
         "Purchase failed",
@@ -118,11 +127,7 @@ export default function Step7Paywall() {
     }
   }
 
-  // Derived price / period strings from the RevenueCat package if available,
-  // falling back to the i18n strings (which already have locale-specific prices)
   const priceString = pkg?.product.priceString ?? t("onboarding.step7.price");
-  const periodString = t("onboarding.step7.period");
-
   const isLoading = purchasing || restoring;
 
   return (
@@ -132,7 +137,7 @@ export default function Step7Paywall() {
           <Ionicons name="chevron-back" size={22} color="#705E46" />
         </TouchableOpacity>
         <View className="flex-1">
-          <OnboardingProgress current={7} total={7} />
+          <OnboardingProgress current={9} total={9} />
         </View>
       </View>
 
@@ -141,10 +146,10 @@ export default function Step7Paywall() {
         showsVerticalScrollIndicator={false}
       >
         {/* Hero image */}
-        <View className="w-full items-center mt-6 mb-6">
+        <View className="w-full items-center mt-4 mb-5">
           <Image
             source={require("@/assets/images/onboarding-4.png")}
-            style={{ width: "100%", height: 240 }}
+            style={{ width: "100%", height: 210 }}
             contentFit="contain"
           />
         </View>
@@ -155,27 +160,41 @@ export default function Step7Paywall() {
         </Text>
 
         {/* Headline */}
-        <Text className="font-serif-display text-4xl text-text-light text-center px-8 leading-snug mb-3">
+        <Text className="font-serif-display text-4xl text-text-light text-center px-8 leading-snug mb-2">
           {t("onboarding.step7.title")}
         </Text>
 
-        {/* Social proof */}
-        <Text className="font-sans-body text-base text-greige text-center px-10 mb-10">
+        {/* Emotional subtext */}
+        <Text className="font-sans-body text-sm text-greige text-center px-10 mb-7 leading-relaxed">
           {t("onboarding.step7.social")}
         </Text>
 
+        {/* Benefits list */}
+        <View className="mx-6 mb-6 gap-3">
+          {BENEFIT_KEYS.map((key) => (
+            <View key={key} className="flex-row items-start gap-3">
+              <View className="w-5 h-5 rounded-full bg-tan items-center justify-center mt-0.5 shrink-0">
+                <Ionicons name="checkmark" size={12} color="#261B10" />
+              </View>
+              <Text className="flex-1 font-sans-medium text-sm text-text-light leading-snug">
+                {t(`onboarding.step7.${key}`)}
+              </Text>
+            </View>
+          ))}
+        </View>
+
         {/* Price card */}
         <View
-          className="mx-6 rounded-3xl bg-surface-dark border border-brown-mid/60 px-6 py-6 items-center"
+          className="mx-6 rounded-3xl bg-surface-dark border border-brown-mid/60 px-6 py-7 items-center"
           style={{
             shadowColor: "#000",
             shadowOffset: { width: 0, height: 8 },
-            shadowOpacity: 0.25,
+            shadowOpacity: 0.3,
             shadowRadius: 20,
             elevation: 8,
           }}
         >
-          <Text className="font-sans-medium text-sm text-greige uppercase tracking-widest mb-2">
+          <Text className="font-sans-medium text-xs text-greige uppercase tracking-widest mb-3">
             {t("onboarding.step7.planLabel")}
           </Text>
 
@@ -187,14 +206,10 @@ export default function Step7Paywall() {
                 {priceString}
               </Text>
               <Text className="font-sans-body text-base text-greige mb-2">
-                {periodString}
+                {t("onboarding.step7.period")}
               </Text>
             </View>
           )}
-
-          <Text className="font-sans-medium text-xs text-brown-mid">
-            {t("onboarding.step7.trial")}
-          </Text>
         </View>
       </ScrollView>
 

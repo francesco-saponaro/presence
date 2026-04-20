@@ -9,6 +9,7 @@ import {
   Platform,
   Linking,
   KeyboardAvoidingView,
+  FlatList,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -23,6 +24,7 @@ import type { BottomSheetBackdropProps } from "@gorhom/bottom-sheet";
 import Constants from "expo-constants";
 import Toast from "react-native-toast-message";
 import { supabase } from "@/lib/supabase";
+import { syncContactsToSupabase } from "@/lib/routineSync";
 import { useAuthStore } from "@/store/auth";
 import { useUserStore } from "@/store/userStore";
 import { useOnboardingStore } from "@/store/onboardingStore";
@@ -132,10 +134,15 @@ export default function ProfileScreen() {
   const blockTimeUtc = useRoutineStore((s) => s.blockTimeUtc);
   const frequency = useRoutineStore((s) => s.frequency);
 
+  const trustedContacts = useRoutineStore((s) => s.trustedContacts);
+  const setTrustedContacts = useRoutineStore((s) => s.setTrustedContacts);
+
   const langSheetRef = useRef<BottomSheetModal>(null);
   const feedbackSheetRef = useRef<BottomSheetModal>(null);
+  const contactsSheetRef = useRef<BottomSheetModal>(null);
   const [feedbackMessage, setFeedbackMessage] = useState("");
   const [sendingFeedback, setSendingFeedback] = useState(false);
+  const [contactInput, setContactInput] = useState("");
 
   const currentLangLabel =
     LANGUAGES.find((l) => l.code === language)?.label ?? "English";
@@ -146,6 +153,21 @@ export default function ProfileScreen() {
     : t("profile.notSet");
 
   // ── Handlers ──────────────────────────────────────────────────────────────
+
+  function handleAddContact() {
+    const name = contactInput.trim();
+    if (!name || trustedContacts.includes(name)) return;
+    const updated = [...trustedContacts, name];
+    setTrustedContacts(updated);
+    setContactInput("");
+    syncContactsToSupabase(updated).catch(() => {});
+  }
+
+  function handleRemoveContact(name: string) {
+    const updated = trustedContacts.filter((c) => c !== name);
+    setTrustedContacts(updated);
+    syncContactsToSupabase(updated).catch(() => {});
+  }
 
   function handleSelectLanguage(code: string) {
     setLanguage(code);
@@ -267,10 +289,22 @@ export default function ProfileScreen() {
             onPress={() => router.push("/(onboarding)/step-4-goal")}
           />
           <Divider />
+          <Divider />
           <Row
             icon="apps-outline"
             label={t("profile.blockedApps")}
             onPress={() => router.push("/(onboarding)/step-5-apps")}
+          />
+          <Divider />
+          <Row
+            icon="people-outline"
+            label={t("profile.trustedContacts")}
+            value={
+              trustedContacts.length > 0
+                ? t("profile.trustedContactsCount", { count: trustedContacts.length })
+                : undefined
+            }
+            onPress={() => contactsSheetRef.current?.present()}
           />
         </Card>
 
@@ -398,6 +432,103 @@ export default function ProfileScreen() {
               {sendingFeedback ? t("common.loading") : "Send"}
             </Text>
           </TouchableOpacity>
+        </BottomSheetView>
+      </BottomSheetModal>
+
+      {/* ── Trusted contacts bottom sheet ── */}
+      <BottomSheetModal
+        ref={contactsSheetRef}
+        snapPoints={["70%"]}
+        enablePanDownToClose
+        keyboardBehavior="extend"
+        backdropComponent={renderBackdrop}
+        backgroundStyle={{ backgroundColor: "#EBE6DF" }}
+        handleIndicatorStyle={{ backgroundColor: "#C6C0B9" }}
+      >
+        <BottomSheetView style={{ flex: 1, paddingHorizontal: 24, paddingBottom: 24 }}>
+          <Text className="font-serif-display text-xl text-text-dark mb-1">
+            {t("profile.trustedContactsSheet")}
+          </Text>
+          <Text className="font-sans-body text-xs text-greige mb-4">
+            {t("profile.trustedContactsHint")}
+          </Text>
+
+          {/* Add input */}
+          <View className="flex-row gap-3 mb-4">
+            <TextInput
+              value={contactInput}
+              onChangeText={setContactInput}
+              placeholder={t("profile.trustedContactsPlaceholder")}
+              placeholderTextColor="#C6C0B9"
+              returnKeyType="done"
+              onSubmitEditing={handleAddContact}
+              style={{
+                flex: 1,
+                backgroundColor: "#FAF7F2",
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: "#C6C0B9",
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                fontFamily: "DMSans-Regular",
+                fontSize: 14,
+                color: "#2A1800",
+              }}
+            />
+            <TouchableOpacity
+              onPress={handleAddContact}
+              disabled={!contactInput.trim()}
+              activeOpacity={0.8}
+              style={{
+                backgroundColor: !contactInput.trim() ? "#C6C0B9" : "#422701",
+                borderRadius: 14,
+                paddingHorizontal: 18,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Text style={{ fontFamily: "DMSans-Medium", fontSize: 14, color: "#FDFBF7" }}>
+                {t("profile.trustedContactsAdd")}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Contact list */}
+          {trustedContacts.length === 0 ? (
+            <Text className="font-sans-body text-sm text-greige text-center mt-4">
+              {t("profile.trustedContactsEmpty")}
+            </Text>
+          ) : (
+            <FlatList
+              data={trustedContacts}
+              keyExtractor={(item) => item}
+              ItemSeparatorComponent={() => (
+                <View className="h-px bg-greige/30 mx-1" />
+              )}
+              renderItem={({ item }) => (
+                <View className="flex-row items-center py-3">
+                  <View
+                    className="w-8 h-8 rounded-full items-center justify-center mr-3"
+                    style={{ backgroundColor: "rgba(214,181,136,0.25)" }}
+                  >
+                    <Text style={{ fontFamily: "DMSans-Medium", fontSize: 13, color: "#422701" }}>
+                      {item[0].toUpperCase()}
+                    </Text>
+                  </View>
+                  <Text className="flex-1 font-sans-medium text-base text-text-dark">
+                    {item}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => handleRemoveContact(item)}
+                    hitSlop={8}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="close-circle" size={22} color="#C6C0B9" />
+                  </TouchableOpacity>
+                </View>
+              )}
+            />
+          )}
         </BottomSheetView>
       </BottomSheetModal>
 
