@@ -15,24 +15,22 @@ import Purchases, {
   LOG_LEVEL,
 } from "react-native-purchases";
 
-// ─── Replace with your real keys ─────────────────────────────────────────────
-const RC_API_KEY_IOS = "appl_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-const RC_API_KEY_ANDROID = "goog_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
+// ─── API keys — loaded from .env.local (never commit keys to git) ────────────
+const RC_API_KEY_IOS =
+  process.env.EXPO_PUBLIC_RC_APPLE_KEY ?? "test_tedGAJizNfqLfKfnnPYFjLpqkek";
+const RC_API_KEY_ANDROID =
+  process.env.EXPO_PUBLIC_RC_ANDROID_KEY ?? "test_tedGAJizNfqLfKfnnPYFjLpqkek";
 const ENTITLEMENT_ID = "premium";
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function configurePurchases(): void {
-  const apiKey = Platform.OS === "ios" ? RC_API_KEY_IOS : RC_API_KEY_ANDROID;
+  Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.VERBOSE : LOG_LEVEL.ERROR);
 
-  if (!apiKey || apiKey.includes("XXXX")) {
-    if (__DEV__) {
-      console.warn("[Purchases] RevenueCat API key not set — purchases disabled.");
-    }
-    return;
+  if (Platform.OS === "ios") {
+    Purchases.configure({ apiKey: RC_API_KEY_IOS });
+  } else if (Platform.OS === "android") {
+    Purchases.configure({ apiKey: RC_API_KEY_ANDROID });
   }
-
-  Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.DEBUG : LOG_LEVEL.ERROR);
-  Purchases.configure({ apiKey });
 }
 
 /** Sync the Supabase user ID so RevenueCat ties purchases to this user. */

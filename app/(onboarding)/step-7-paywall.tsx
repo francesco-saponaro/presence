@@ -73,10 +73,6 @@ export default function Step7Paywall() {
       // Persist all routine data (block time, frequency, apps, contacts) collected
       // during onboarding to Supabase now that we have a confirmed user.
       syncRoutineToSupabase().catch(() => {});
-
-      supabase.functions
-        .invoke("welcome-email", { body: { email: user.email } })
-        .catch(() => {});
     }
 
     router.replace("/(tabs)");

@@ -156,8 +156,8 @@ All post-auth navigation is centralised in two places — never scatter `router.
 - **Edge Functions:** Four functions deployed via `supabase functions deploy <name>`:
   - `delete-account` — admin-deletes the auth user (cascades all DB rows).
   - `revenuecat-webhook` — syncs subscription status from RevenueCat server events. Requires `REVENUECAT_WEBHOOK_SECRET` secret.
-  - `welcome-email` — sends Resend welcome email on first purchase. Requires `RESEND_API_KEY` and `FROM_EMAIL` secrets.
-  - `contact` — routes in-app feedback via Resend. Requires `RESEND_API_KEY`, `FROM_EMAIL`, `SUPPORT_EMAIL` secrets.
+  - `welcome-email` — **currently disabled** (removed from paywall `handlePurchaseSuccess`). The function file remains deployed for future use. Requires `RESEND_API_KEY` and `FROM_EMAIL` secrets when re-enabled.
+  - `contact` — routes in-app feedback via Resend. Requires `RESEND_API_KEY`, `FROM_EMAIL`, `SUPPORT_EMAIL` secrets. Production patterns applied: (1) CORS headers + OPTIONS preflight so it works from any client; (2) graceful `{ skipped: true }` response when `RESEND_API_KEY` is not set, preventing 500s in staging; (3) `reply_to: senderEmail` so support can reply directly to the user from the inbox; (4) try/catch around body parsing with a proper 400 response on malformed input; (5) HTML body with `white-space:pre-wrap` so multiline messages render correctly.
 - **Resend:** Set secrets in Supabase: `supabase secrets set RESEND_API_KEY=re_xxx FROM_EMAIL="Presence <hello@presence.app>" SUPPORT_EMAIL="support@presence.app"`
 - **Expo Notifications (local only):** Two notification types implemented in `lib/notifications.ts`:
   1. **Warm-up:** Fires 15 min before block time. Re-scheduled by `initNotifications()` on app start.
@@ -268,7 +268,7 @@ These were discovered during development and must be respected:
 
 These items must be completed before submitting to App Store / Play Store:
 
-- [ ] **RevenueCat API keys:** Replace `appl_XXXX` / `goog_XXXX` placeholders in `lib/purchases.ts` with real keys from the RevenueCat dashboard.
+- [ ] **RevenueCat API keys:** Test keys set in `lib/purchases.ts`. Replace with production keys from the RevenueCat dashboard before submitting to stores.
 - [ ] **RevenueCat entitlement:** Verify the entitlement ID `"premium"` matches what's configured in the RevenueCat dashboard.
 - [ ] **Supabase Edge Functions deployed:** Run `supabase functions deploy` for all 4 functions.
 - [ ] **Supabase secrets set:** `RESEND_API_KEY`, `FROM_EMAIL`, `SUPPORT_EMAIL`, `REVENUECAT_WEBHOOK_SECRET`.

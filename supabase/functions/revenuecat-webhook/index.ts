@@ -1,146 +1,96 @@
 /**
  * Edge Function: revenuecat-webhook
- *
- * Receives RevenueCat server-to-server webhook events and syncs the
- * subscription status to the public.profiles table.
- *
- * Setup in RevenueCat dashboard:
- *   Project Settings → Integrations → Webhooks → Add Endpoint
- *   URL: https://<project-ref>.supabase.co/functions/v1/revenuecat-webhook
- *   Authorization header: Bearer <REVENUECAT_WEBHOOK_SECRET>
- *
- * Set environment variable REVENUECAT_WEBHOOK_SECRET in Supabase:
- *   supabase secrets set REVENUECAT_WEBHOOK_SECRET=<your-secret>
- *
- * Deploy:
- *   supabase functions deploy revenuecat-webhook --no-verify-jwt
  */
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
-
 // RevenueCat event types that indicate an active subscription
-const ACTIVE_EVENTS = new Set([
-  "INITIAL_PURCHASE",
-  "RENEWAL",
-  "PRODUCT_CHANGE",
-  "UNCANCELLATION",
-  "SUBSCRIBER_ALIAS",
-]);
-
+const ACTIVE_EVENTS = ["INITIAL_PURCHASE", "RENEWAL", "PRODUCT_CHANGE", "UNCANCELLATION"];
 // RevenueCat event types that indicate a lapsed/cancelled subscription
-const INACTIVE_EVENTS = new Set([
-  "CANCELLATION",
-  "EXPIRATION",
-  "BILLING_ISSUE",
-  "SUBSCRIBER_DELETION",
-]);
+const INACTIVE_EVENTS = ["CANCELLATION", "EXPIRATION", "BILLING_ISSUE"];
 
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
-
-  // Verify webhook secret
+  // 1. Strict Security Check
   const webhookSecret = Deno.env.get("REVENUECAT_WEBHOOK_SECRET");
-  if (webhookSecret) {
-    const authHeader = req.headers.get("Authorization") ?? "";
-    if (authHeader !== `Bearer ${webhookSecret}`) {
-      return new Response(JSON.stringify({ error: "Forbidden" }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+  const authHeader = req.headers.get("Authorization");
+
+  if (!webhookSecret || authHeader !== `Bearer ${webhookSecret}`) {
+    console.error("Unauthorized webhook attempt");
+    return new Response("Unauthorized", { status: 403 });
   }
 
-  let body: Record<string, unknown>;
   try {
-    body = await req.json();
-  } catch {
-    return new Response(JSON.stringify({ error: "Invalid JSON" }), {
-      status: 400,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
+    // 2. Parse the RevenueCat Event
+    const body = await req.json();
+    const event = body.event;
 
-  const event = body.event as Record<string, unknown> | undefined;
-  if (!event) {
-    return new Response(JSON.stringify({ error: "Missing event" }), {
-      status: 400,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
+    if (!event) return new Response("Missing event", { status: 400 });
 
-  const eventType = event.type as string;
-  const appUserId = event.app_user_id as string | undefined;
-  const expiresAtMs = event.expiration_at_ms as number | undefined;
+    const eventType = event.type;
+    const appUserId = event.app_user_id;
+    const expiresAtMs = event.expiration_at_ms;
 
-  if (!appUserId) {
-    // Nothing to do if we have no user ID
-    return new Response(JSON.stringify({ received: true }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
-  const isActive = ACTIVE_EVENTS.has(eventType);
-  const isInactive = INACTIVE_EVENTS.has(eventType);
-
-  if (!isActive && !isInactive) {
-    // Unknown event type — acknowledge without acting
-    return new Response(JSON.stringify({ received: true }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
-  const adminClient = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-  );
-
-  const subscriptionExpiresAt = expiresAtMs
-    ? new Date(expiresAtMs).toISOString()
-    : null;
-
-  const { error } = await adminClient
-    .from("profiles")
-    .update({
-      is_subscribed: isActive,
-      subscription_expires_at: isActive ? subscriptionExpiresAt : null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", appUserId);
-
-  if (error) {
-    console.error("Profile update error:", error);
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
-  // If a purchase just completed, trigger welcome email
-  if (eventType === "INITIAL_PURCHASE") {
-    const { data: profile } = await adminClient
-      .from("profiles")
-      .select("email")
-      .eq("id", appUserId)
-      .single();
-
-    if (profile?.email) {
-      await adminClient.functions.invoke("welcome-email", {
-        body: { email: profile.email },
-      });
+    // 3. The Anonymous User Fix (from your old code!)
+    if (!appUserId || appUserId.startsWith("$RCAnonymous")) {
+      console.log("Ignored anonymous user");
+      return new Response(JSON.stringify({ received: true }), { status: 200 });
     }
-  }
 
-  return new Response(JSON.stringify({ received: true }), {
-    status: 200,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
+    // Initialize Supabase Admin (bypasses Row Level Security)
+    const adminClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+
+    const subscriptionExpiresAt = expiresAtMs ? new Date(expiresAtMs).toISOString() : null;
+
+    // 4. Handle Active Subscriptions
+    if (ACTIVE_EVENTS.includes(eventType)) {
+      console.log(`[RevenueCat] Unlocking Pro for user: ${appUserId}`);
+      
+      const { error } = await adminClient
+        .from("profiles") // NOTE: Ensure your table is named 'profiles' (old code used 'users')
+        .update({
+          is_subscribed: true, // NOTE: Ensure your column is 'is_subscribed' (old code used 'is_pro')
+          subscription_expires_at: subscriptionExpiresAt,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", appUserId);
+
+      if (error) throw error;
+
+      // Trigger welcome email on first purchase
+      if (eventType === "INITIAL_PURCHASE") {
+        const { data: profile } = await adminClient.from("profiles").select("email").eq("id", appUserId).single();
+        if (profile?.email) {
+          // Assuming you have a 'welcome-email' function deployed
+          await adminClient.functions.invoke("welcome-email", {
+            body: { email: profile.email },
+          });
+        }
+      }
+    }
+
+    // 5. Handle Cancellations & Expirations
+    if (INACTIVE_EVENTS.includes(eventType)) {
+      console.log(`[RevenueCat] Removing Pro for user: ${appUserId}`);
+      
+      const { error } = await adminClient
+        .from("profiles")
+        .update({
+          is_subscribed: false,
+          subscription_expires_at: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", appUserId);
+
+      if (error) throw error;
+    }
+
+    return new Response(JSON.stringify({ success: true }), { status: 200 });
+
+  } catch (error: any) {
+    console.error(`Error processing RevenueCat webhook: ${error.message}`);
+    return new Response("Webhook handler failed", { status: 500 });
+  }
 });

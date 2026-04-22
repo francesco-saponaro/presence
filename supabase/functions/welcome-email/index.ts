@@ -42,7 +42,7 @@ Deno.serve(async (req: Request) => {
   }
 
   const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
-  const FROM_EMAIL = Deno.env.get("FROM_EMAIL") ?? "Presence <hello@presence.app>";
+  const FROM_EMAIL = Deno.env.get("FROM_EMAIL");
 
   if (!RESEND_API_KEY) {
     console.warn("RESEND_API_KEY not set — skipping welcome email");
