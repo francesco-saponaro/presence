@@ -21,8 +21,8 @@ import { signInWithApple, signInWithGoogle } from "@/lib/socialAuth";
 import { AuthInput } from "@/components/ui/AuthInput";
 import { PillButton } from "@/components/ui/PillButton";
 
-const TOS_URL = "https://presence.app/terms";
-const PRIVACY_URL = "https://presence.app/privacy";
+const TOS_URL = "https://gist.github.com/francesco-saponaro/8fc0b7c3e435c4880cca34b70526adf4";
+const PRIVACY_URL = "https://gist.github.com/francesco-saponaro/8fc0b7c3e435c4880cca34b70526adf4";
 
 export default function SignupScreen() {
   const { t } = useTranslation();

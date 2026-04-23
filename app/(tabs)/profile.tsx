@@ -47,8 +47,8 @@ const SUBSCRIPTION_URL =
     ? "itms-apps://apps.apple.com/account/subscriptions"
     : "https://play.google.com/store/account/subscriptions";
 
-const TERMS_URL = "https://getpresenceapp.com/terms";
-const PRIVACY_URL = "https://getpresenceapp.com/privacy";
+const TERMS_URL = "https://gist.github.com/francesco-saponaro/8fc0b7c3e435c4880cca34b70526adf4";
+const PRIVACY_URL = "https://gist.github.com/francesco-saponaro/8fc0b7c3e435c4880cca34b70526adf4";
 const FEEDBACK_EMAIL = "mailto:hello@getpresenceapp.com";
 
 const APP_VERSION = Constants.expoConfig?.version ?? "1.0.0";

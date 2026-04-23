@@ -27,8 +27,8 @@ import {
 import { supabase } from "@/lib/supabase";
 import { syncRoutineToSupabase } from "@/lib/routineSync";
 
-const TOS_URL = "https://presence.app/terms";
-const PRIVACY_URL = "https://presence.app/privacy";
+const TOS_URL = "https://gist.github.com/francesco-saponaro/8fc0b7c3e435c4880cca34b70526adf4";
+const PRIVACY_URL = "https://gist.github.com/francesco-saponaro/8fc0b7c3e435c4880cca34b70526adf4";
 
 const BENEFIT_KEYS = ["benefit1", "benefit2", "benefit3", "benefit4"] as const;
 

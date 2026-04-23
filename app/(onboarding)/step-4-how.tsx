@@ -1,17 +1,35 @@
-import { View, Text, ScrollView, TouchableOpacity } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { OnboardingProgress } from "@/components/ui/OnboardingProgress";
+import { PillButton } from "@/components/ui/PillButton";
+import { useOnboardingStore } from "@/store/onboardingStore";
+import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { useTranslation } from "react-i18next";
-import { Ionicons } from "@expo/vector-icons";
-import { useOnboardingStore } from "@/store/onboardingStore";
-import { OnboardingProgress } from "@/components/ui/OnboardingProgress";
-import { PillButton } from "@/components/ui/PillButton";
+import { ScrollView, Text, TouchableOpacity, View } from "react-native";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 const HOW_STEPS = [
-  { number: "1", titleKey: "step1Title", descKey: "step1Desc", icon: "lock-closed-outline" },
-  { number: "2", titleKey: "step2Title", descKey: "step2Desc", icon: "chatbubble-ellipses-outline" },
-  { number: "3", titleKey: "step3Title", descKey: "step3Desc", icon: "camera-outline" },
+  {
+    number: "1",
+    titleKey: "step1Title",
+    descKey: "step1Desc",
+    icon: "lock-closed-outline",
+  },
+  {
+    number: "2",
+    titleKey: "step2Title",
+    descKey: "step2Desc",
+    icon: "chatbubble-ellipses-outline",
+  },
+  {
+    number: "3",
+    titleKey: "step3Title",
+    descKey: "step3Desc",
+    icon: "camera-outline",
+  },
 ] as const;
 
 export default function Step4How() {
@@ -46,10 +64,10 @@ export default function Step4How() {
         showsVerticalScrollIndicator={false}
       >
         {/* Boilerplate hero image — replace with final asset */}
-        <View className="w-full items-center mt-6 mb-6">
+        <View className="w-full items-center mt-6 mb-8 overflow-hidden">
           <Image
-            source={require("@/assets/images/onboarding-1.png")}
-            style={{ width: "100%", height: 200 }}
+            source={require("@/assets/images/onboarding-5.png")}
+            style={{ width: "100%", height: 240, transform: [{ scale: 4 }] }}
             contentFit="contain"
           />
         </View>
@@ -111,7 +129,11 @@ export default function Step4How() {
         className="px-6 pt-4 border-t border-surface-light dark:border-surface-dark"
         style={{ paddingBottom: Math.max(insets.bottom, 24) }}
       >
-        <PillButton label={t("common.continue")} variant="primary" onPress={handleNext} />
+        <PillButton
+          label={t("common.continue")}
+          variant="primary"
+          onPress={handleNext}
+        />
       </View>
     </SafeAreaView>
   );

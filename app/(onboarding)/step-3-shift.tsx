@@ -1,12 +1,12 @@
-import { View, Text, ScrollView, TouchableOpacity } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { OnboardingProgress } from "@/components/ui/OnboardingProgress";
+import { PillButton } from "@/components/ui/PillButton";
+import { useOnboardingStore } from "@/store/onboardingStore";
+import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { useTranslation } from "react-i18next";
-import { Ionicons } from "@expo/vector-icons";
-import { useOnboardingStore } from "@/store/onboardingStore";
-import { OnboardingProgress } from "@/components/ui/OnboardingProgress";
-import { PillButton } from "@/components/ui/PillButton";
+import { ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function Step3Shift() {
   const { t } = useTranslation();
@@ -68,7 +68,11 @@ export default function Step3Shift() {
       </ScrollView>
 
       <View className="px-6 pb-8 pt-4 border-t border-surface-light dark:border-surface-dark">
-        <PillButton label={t("common.continue")} variant="primary" onPress={handleNext} />
+        <PillButton
+          label={t("common.continue")}
+          variant="primary"
+          onPress={handleNext}
+        />
       </View>
     </SafeAreaView>
   );
