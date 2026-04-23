@@ -51,7 +51,12 @@ public class PresenceScreenTime: NSObject {
         )
 
         // Setting to nil when empty ensures we never leave a stale empty-set shield.
-        store.shield.applications = tokens.isEmpty ? nil : tokens
+        if tokens.isEmpty {
+            store.shield.applications = nil
+        } else {
+            store.shield.applications = tokens
+        }
+        
         resolve(nil)
     }
 
