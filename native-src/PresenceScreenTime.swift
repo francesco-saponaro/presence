@@ -44,10 +44,11 @@ public class PresenceScreenTime: NSObject {
             return
         }
 
+        // CRITICAL FIX: The second mapping MUST be compactMap to unwrap the optional tokens
         let tokens = Set(
             bundleIds
                 .compactMap { Application(bundleIdentifier: $0) }
-                .map { $0.token }
+                .compactMap { $0.token } 
         )
 
         // Setting to nil when empty ensures we never leave a stale empty-set shield.
