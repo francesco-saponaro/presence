@@ -13,7 +13,18 @@ public class PresenceScreenTime: NSObject {
     @objc
     public func requestAuthorization(_ resolve: @escaping RCTPromiseResolveBlock,
                                      reject: @escaping RCTPromiseRejectBlock) {
-        if #available(iOS 15.0, *) {
+        if #available(iOS 16.0, *) {
+            // iOS 16+ requires specifying the member type — the old zero-argument
+            // completion handler was deprecated and silently fails on iOS 16+.
+            Task {
+                do {
+                    try await AuthorizationCenter.shared.requestAuthorization(for: .individual)
+                    resolve("Approved")
+                } catch {
+                    reject("AUTH_ERROR", error.localizedDescription, error)
+                }
+            }
+        } else if #available(iOS 15.0, *) {
             AuthorizationCenter.shared.requestAuthorization { result in
                 switch result {
                 case .success:

@@ -4,7 +4,7 @@
     "slug": "presence",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/logo-android.png",
     "scheme": "presence",
     "userInterfaceStyle": "automatic",
     "ios": {
@@ -21,7 +21,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/icon.png",
+        "foregroundImage": "./assets/images/logo-ios.png",
         "backgroundColor": "#FAF7F2"
       },
       "package": "com.franciccio.presence",
@@ -45,7 +45,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/icon.png",
+          "image": "./assets/images/logo-app.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#FAF7F2",
