@@ -2,15 +2,16 @@ import { toastConfig } from "@/components/toastConfig";
 import i18n from "@/i18n";
 import { routeAfterAuth } from "@/lib/authRouting";
 import { initNotifications } from "@/lib/notifications";
-import { isInRecovery, storePendingResetUrl } from "@/lib/recoveryState";
 import {
   configurePurchases,
   identifyPurchasesUser,
   resetPurchasesUser,
 } from "@/lib/purchases";
+import { isInRecovery, storePendingResetUrl } from "@/lib/recoveryState";
 import { startShieldEngine } from "@/lib/shieldEngine";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/store/auth";
+import { useOnboardingStore } from "@/store/onboardingStore";
 import { useUserStore } from "@/store/userStore";
 import {
   DMSans_400Regular,
@@ -20,10 +21,10 @@ import {
 import { DMSerifDisplay_400Regular } from "@expo-google-fonts/dm-serif-display";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { useFonts } from "expo-font";
+import * as Linking from "expo-linking";
 import { router, Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
-import * as Linking from "expo-linking";
 import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -69,11 +70,12 @@ export default function RootLayout() {
     return () => sub.remove();
   }, []);
 
-  // Restore the user's saved language preference on every cold start.
+  // Restore language on cold start.
+  // Only override the device-detected default if the user explicitly picked a language.
   useEffect(() => {
-    const savedLang = useUserStore.getState().language;
-    if (savedLang && savedLang !== i18n.language) {
-      i18n.changeLanguage(savedLang);
+    const { language, languageSetByUser } = useUserStore.getState();
+    if (languageSetByUser && language && language !== i18n.language) {
+      i18n.changeLanguage(language);
     }
   }, []);
 
@@ -102,12 +104,31 @@ export default function RootLayout() {
       useAuthStore.getState().setSession(session);
 
       if (session?.user) {
-        useUserStore
-          .getState()
-          .setUser(session.user.id, session.user.email ?? "");
+        const incomingId = session.user.id;
+        const storedId = useUserStore.getState().userId;
+
+        // Detect a brand-new signup: account created within the last 2 minutes.
+        // This is the most reliable signal — it fires even when storedId is null
+        // (e.g. user deleted their Supabase account, SIGNED_OUT cleared userId,
+        // then they re-registered on the same device).
+        const createdMs = session.user.created_at
+          ? new Date(session.user.created_at).getTime()
+          : 0;
+        const isNewAccount = Date.now() - createdMs < 120_000;
+
+        // Also reset if a different *existing* account signs in on this device
+        // (storedId non-null and doesn't match the incoming session).
+        const isDifferentUser = storedId !== null && storedId !== incomingId;
+
+        if (isNewAccount || isDifferentUser) {
+          useOnboardingStore.getState().resetOnboarding();
+          useUserStore.getState().clearUser();
+        }
+
+        useUserStore.getState().setUser(incomingId, session.user.email ?? "");
 
         // Tie RevenueCat purchases to this Supabase user ID
-        identifyPurchasesUser(session.user.id);
+        identifyPurchasesUser(incomingId);
       }
 
       // SIGNED_IN covers email, Apple, and Google auth — route to the

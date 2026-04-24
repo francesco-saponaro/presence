@@ -81,10 +81,14 @@ All post-auth navigation is centralised in two places — never scatter `router.
 1. **`lib/authRouting.ts` — `routeAfterAuth()`:** A plain function (no hooks) that reads Zustand state via `getState()` and calls `router.replace` to the correct screen. Logic: `!isOnboardingComplete` → step-N route, `!isSubscribed` → paywall, else → tabs. Import and call this wherever routing after auth is needed.
 
 2. **`app/_layout.tsx` — `onAuthStateChange` handler:** The single global listener that drives all auth-triggered navigation:
-   - `SIGNED_IN` → calls `routeAfterAuth()`. This fires for **all** sign-in methods (email, Apple, Google) so screens do NOT need their own `router.replace` after auth succeeds.
+   - `SIGNED_IN` → before routing, checks whether to wipe local state (see "New-user state reset" below), then calls `routeAfterAuth()`. This fires for **all** sign-in methods (email, Apple, Google) so screens do NOT need their own `router.replace` after auth succeeds.
    - `SIGNED_OUT` → clears user state and routes to `/(auth)/login`.
    - `PASSWORD_RECOVERY` → early return (handled entirely in `reset-password.tsx`).
    - `INITIAL_SESSION` → no routing here; `index.tsx` handles cold-start routing via its `useEffect`.
+   - **New-user state reset (CRITICAL):** On `SIGNED_IN`, the handler compares `session.user.created_at` and `session.user.id` against stored Zustand state to decide whether to wipe local onboarding/user data before routing:
+     1. `isNewAccount` — `created_at` within the last 2 minutes → fresh signup → always call `resetOnboarding()` + `clearUser()`. Handles the "delete account from Supabase backend then re-register" case even when `userId` was already cleared to `null` by a prior `SIGNED_OUT`.
+     2. `isDifferentUser` — stored `userId` is non-null and differs from the incoming session ID → different existing account on same device → same reset.
+     This prevents a returning new user from landing mid-onboarding (or at the paywall) due to stale Zustand persisted state from a previous account.
 
 3. **`app/index.tsx` — cold-start routing brain:** Waits for `authHydrated && onboardingHydrated`, then routes once based on stored state. Only relevant for `INITIAL_SESSION` (session restore on app launch). Does NOT fire for interactive sign-ins.
 
@@ -120,6 +124,11 @@ All post-auth navigation is centralised in two places — never scatter `router.
 7. **App Selection** (`step-5-apps`) — List of social apps with checkboxes. Select the ones Presence will shield. Requires at least 1 selection. Same as before.
 
 8. **Permissions** (`step-6-permissions`) — Four toggle rows: 1) Screen Time / Usage Access, 2) Notifications, 3) Activity Tracking, 4) Photo Library.
+   - **Required vs optional:** Screen Time and Photo Library are **required** — the Continue button is blocked and a toast fires if either is missing. Notifications is **recommended** (soft warning toast on continue, but navigation proceeds). Activity Tracking is fully optional.
+   - **Visual badges:** Required rows show a dark-brown `REQUIRED` pill; Notifications shows an outlined `RECOMMENDED` pill.
+   - **Toggle-off guard:** Required permissions cannot be toggled off from within the app (the switch bounces back and shows an info toast). They can only be revoked in iOS/Android Settings.
+   - **Permission detection on mount:** `checkCurrentStatus()` is called for all four permissions on mount via `useEffect` + `useCallback` so the switches reflect the real OS state immediately. An `AppState` listener re-runs the check whenever the app returns to foreground (handles Android deep-links to Settings).
+   - **iOS FamilyControls re-request gotcha (CRITICAL):** On iOS 16+, `AuthorizationCenter.shared.requestAuthorization(for: .individual)` **throws** if called again after FamilyControls is already authorized. The `requestPermission` function therefore calls `requestAuthorization()` first; if it throws, it falls back to reading `getAuthorizationStatus()` to check whether it was already approved. `getAuthorizationStatus()` is implemented in `native-src/PresenceScreenTime.swift` (reads `AuthorizationCenter.shared.authorizationStatus`) and bridged in `native-src/PresenceScreenTime.m` — it requires an EAS build to take effect.
    - **iOS:** Routes to Apple's native prompt for `FamilyControls`, push notifications, and photo gallery access.
    - **Android (CRITICAL):** Routes to deep OS settings for `PACKAGE_USAGE_STATS` and `SYSTEM_ALERT_WINDOW`. Must also prompt to disable Battery Optimization (`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`). Use Lottie animations or GIFs to guide Android users through the OS screens.
 
@@ -251,7 +260,30 @@ These were discovered during development and must be respected:
    - The `replace` target is always the explicit route for the previous logical step. Remember that logical step numbers no longer match filenames (e.g. logical step 5 lives in `step-4-goal.tsx`). Always reference the actual filename in the replace call, not a computed step number.
    - This pattern applies to any multi-step flow where the user can re-enter mid-flow from a persisted state.
 
-12. **Password Reset Deep Link — Architecture (CRITICAL):**
+12. **FamilyControls `requestAuthorization` Throws When Already Authorized:**
+   - On iOS 16+, calling `AuthorizationCenter.shared.requestAuthorization(for: .individual)` a second time after authorization has already been granted **throws an error** (it does not silently no-op).
+   - Never call `requestAuthorization()` unconditionally when the user taps the Screen Time toggle. Always attempt it first (primary path) and fall back to `getAuthorizationStatus()` in the catch block to check whether it was already approved.
+   - `getAuthorizationStatus()` reads `AuthorizationCenter.shared.authorizationStatus` synchronously (`.approved` / `.denied` / `.notDetermined`). It must be implemented in `native-src/PresenceScreenTime.swift` AND bridged via `RCT_EXTERN_METHOD` in `native-src/PresenceScreenTime.m`. Without the native build, the fallback also throws and the switch stays OFF — this is the expected behaviour until the next EAS build.
+   - Similarly, `checkCurrentStatus()` on the permissions screen uses `getAuthorizationStatus()` on mount to pre-populate the switch as ON when FamilyControls was already granted. This also requires the EAS build.
+
+13. **`@gorhom/bottom-sheet` — Keyboard, Scrolling & Input Rules (CRITICAL):**
+
+   **Keyboard avoidance:**
+   - Always use `BottomSheetTextInput` (from `@gorhom/bottom-sheet`) instead of React Native's `TextInput` inside any `BottomSheetModal` or `BottomSheetView`. Without it, the sheet has no awareness of input focus and keyboard avoidance never triggers regardless of `keyboardBehavior`.
+   - `keyboardBehavior="extend"` — expands the sheet downward by the keyboard height, keeping it anchored at its snap point. Use this for sheets with text inputs where you don't want the sheet to move. Requires `BottomSheetTextInput` to work.
+   - `keyboardBehavior="interactive"` — the sheet physically rides up with the keyboard. Use this for dynamic-height sheets (no `snapPoints`). With fixed snap points it overshoots because it tries to reach the snap point while also clearing the keyboard.
+   - Always pair with `keyboardBlurBehavior="restore"` so the sheet snaps back when the keyboard is dismissed.
+   - Always add `android_keyboardInputMode="adjustResize"` for correct Android behaviour.
+
+   **Scrollable content inside a sheet:**
+   - Use `BottomSheetFlatList` / `BottomSheetScrollView` (from `@gorhom/bottom-sheet`) — NOT React Native's `FlatList` / `ScrollView`. The gorhom versions register with the sheet's internal gesture handler so scroll and dismiss gestures don't conflict.
+   - `BottomSheetFlatList` **must be the direct child** of `BottomSheetModal`. Wrapping it inside a `BottomSheetView` prevents gorhom from measuring content height, causing the sheet to open collapsed. Move any fixed header content into `ListHeaderComponent` instead.
+   - For a sheet that needs both a fixed header/input area and a scrollable list, use `ListHeaderComponent` for the fixed part and `ListEmptyComponent` for the empty state — do not wrap the `BottomSheetFlatList` in anything.
+
+   **Tap-through when keyboard is open:**
+   - Add `keyboardShouldPersistTaps="handled"` to `BottomSheetFlatList` / `BottomSheetScrollView`. Without it, tapping a button (e.g. "Add") while the keyboard is open first dismisses the keyboard, consuming the tap — the button's `onPress` never fires and the user has to tap twice.
+
+14. **Password Reset Deep Link — Architecture (CRITICAL):**
    - In implicit flow (current default, no `flowType: 'pkce'`), Supabase redirects to: `presence://reset-password#access_token=...&refresh_token=...&type=recovery`
    - **Hash fragments are NOT exposed via `useLocalSearchParams`** — only `?query` params are. The tokens live in the `#` fragment.
    - **`Linking.useURL()` / `Linking.getInitialURL()` alone are unreliable** in screens mounted after Expo Router's navigation completes — by that point the URL event may have already been consumed.

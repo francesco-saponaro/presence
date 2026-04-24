@@ -114,11 +114,14 @@ export async function syncPendingConnections(): Promise<void> {
     if (!error) markConnectionSynced(conn.timestamp);
   }
 
-  // Mirror the lifetime count into the profiles table
-  const total = useUserStore.getState().lifetimeSuccessfulConnections;
+  // Mirror lifetime count + streak into the profiles table
+  const { lifetimeSuccessfulConnections, currentStreak } = useUserStore.getState();
   const { error: updateError } = await supabase
     .from("profiles")
-    .update({ lifetime_connections: total })
+    .update({
+      lifetime_connections: lifetimeSuccessfulConnections,
+      current_streak: currentStreak,
+    })
     .eq("id", session.user.id);
   if (updateError) console.warn("[shieldEngine] profile update:", updateError);
 }

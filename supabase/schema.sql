@@ -13,6 +13,7 @@ create table if not exists public.profiles (
   is_subscribed             boolean not null default false,
   subscription_expires_at   timestamptz,
   lifetime_connections      integer not null default 0,
+  current_streak            integer not null default 0,
   created_at                timestamptz not null default now(),
   updated_at                timestamptz not null default now()
 );
@@ -45,6 +46,9 @@ create table if not exists public.routines (
 -- Migration for existing databases: add trusted_contacts if the table already exists
 -- Run this manually in the Supabase SQL Editor if the table was created before this column was added:
 -- alter table public.routines add column if not exists trusted_contacts text[] not null default '{}';
+
+-- Migration for existing databases: add current_streak to profiles
+-- alter table public.profiles add column if not exists current_streak integer not null default 0;
 
 alter table public.routines enable row level security;
 

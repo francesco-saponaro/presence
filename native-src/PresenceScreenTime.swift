@@ -38,6 +38,27 @@ public class PresenceScreenTime: NSObject {
         }
     }
 
+    // ── Authorization status ──────────────────────────────────────────────────
+
+    @objc
+    public func getAuthorizationStatus(_ resolve: @escaping RCTPromiseResolveBlock,
+                                       reject: @escaping RCTPromiseRejectBlock) {
+        if #available(iOS 15.0, *) {
+            switch AuthorizationCenter.shared.authorizationStatus {
+            case .approved:
+                resolve("approved")
+            case .denied:
+                resolve("denied")
+            case .notDetermined:
+                resolve("notDetermined")
+            @unknown default:
+                resolve("unknown")
+            }
+        } else {
+            resolve("unknown")
+        }
+    }
+
     // ── Shield management ─────────────────────────────────────────────────────
 
     /**

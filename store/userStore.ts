@@ -10,10 +10,12 @@ interface UserState {
   lifetimeSuccessfulConnections: number;
   currentStreak: number;
   lastConnectionDate: string | null; // "YYYY-MM-DD" local date
-  language: string; // persisted i18n locale code
+  language: string;         // persisted i18n locale code
+  languageSetByUser: boolean; // true only after an explicit manual selection
 
   setUser: (userId: string, email: string) => void;
   setSubscribed: (isSubscribed: boolean, expiresAt?: string | null) => void;
+  setStats: (connections: number, streak: number) => void;
   /**
    * Record one successful connection.
    * Always increments the lifetime counter.
@@ -47,8 +49,12 @@ export const useUserStore = create<UserState>()(
       currentStreak: 0,
       lastConnectionDate: null,
       language: "en",
+      languageSetByUser: false,
 
       setUser: (userId, email) => set({ userId, email }),
+
+      setStats: (connections, streak) =>
+        set({ lifetimeSuccessfulConnections: connections, currentStreak: streak }),
 
       setSubscribed: (isSubscribed, expiresAt = null) =>
         set({ isSubscribed, subscriptionExpiresAt: expiresAt }),
@@ -82,7 +88,7 @@ export const useUserStore = create<UserState>()(
           lifetimeSuccessfulConnections: s.lifetimeSuccessfulConnections + 1,
         })),
 
-      setLanguage: (language) => set({ language }),
+      setLanguage: (language) => set({ language, languageSetByUser: true }),
 
       clearUser: () =>
         set({

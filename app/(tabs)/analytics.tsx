@@ -1,7 +1,10 @@
-import { View, Text, ScrollView } from "react-native";
+import { useCallback, useState } from "react";
+import { View, Text, ScrollView, RefreshControl } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import { useUserStore } from "@/store/userStore";
+import { supabase } from "@/lib/supabase";
+import { syncPendingConnections } from "@/lib/shieldEngine";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -59,15 +62,49 @@ export default function AnalyticsScreen() {
 
   const connections = useUserStore((s) => s.lifetimeSuccessfulConnections);
   const streak = useUserStore((s) => s.currentStreak);
+  const setStats = useUserStore((s) => s.setStats);
   const timeLabel = formatTimeReclaimed(connections);
 
   const isEmpty = connections === 0;
+
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await syncPendingConnections();
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const { data } = await supabase
+          .from("profiles")
+          .select("lifetime_connections, current_streak")
+          .eq("id", session.user.id)
+          .single();
+        if (data) {
+          setStats(data.lifetime_connections, data.current_streak);
+        }
+      }
+    } catch {
+      // Silently swallow — local state is already shown
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [setStats]);
 
   return (
     <SafeAreaView className="flex-1 bg-milk dark:bg-espresso" edges={["top"]}>
       <ScrollView
         contentContainerStyle={{ flexGrow: 1, paddingBottom: Math.max(insets.bottom, 24) }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            tintColor="#705E46"
+            colors={["#705E46"]}
+          />
+        }
       >
         <View className="px-6">
           {/* ── Wordmark ── */}

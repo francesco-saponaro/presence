@@ -1,36 +1,38 @@
-import { useRef, useCallback, useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  ScrollView,
-  Alert,
-  Platform,
-  Linking,
-  KeyboardAvoidingView,
-  FlatList,
-} from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { router } from "expo-router";
-import { useTranslation } from "react-i18next";
-import { Ionicons } from "@expo/vector-icons";
-import {
-  BottomSheetModal,
-  BottomSheetView,
-  BottomSheetBackdrop,
-} from "@gorhom/bottom-sheet";
-import type { BottomSheetBackdropProps } from "@gorhom/bottom-sheet";
-import Constants from "expo-constants";
-import Toast from "react-native-toast-message";
-import { supabase } from "@/lib/supabase";
+import i18n from "@/i18n";
 import { syncContactsToSupabase } from "@/lib/routineSync";
+import { supabase } from "@/lib/supabase";
+import { formatBlockTime } from "@/lib/timezone";
 import { useAuthStore } from "@/store/auth";
-import { useUserStore } from "@/store/userStore";
 import { useOnboardingStore } from "@/store/onboardingStore";
 import { useRoutineStore } from "@/store/routine";
-import { formatBlockTime } from "@/lib/timezone";
-import i18n from "@/i18n";
+import { useUserStore } from "@/store/userStore";
+import { Ionicons } from "@expo/vector-icons";
+import type { BottomSheetBackdropProps } from "@gorhom/bottom-sheet";
+import {
+  BottomSheetBackdrop,
+  BottomSheetFlatList,
+  BottomSheetModal,
+  BottomSheetTextInput,
+  BottomSheetView,
+} from "@gorhom/bottom-sheet";
+import Constants from "expo-constants";
+import { router } from "expo-router";
+import { useCallback, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import {
+  Alert,
+  Linking,
+  Platform,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
+import Toast from "react-native-toast-message";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -47,8 +49,10 @@ const SUBSCRIPTION_URL =
     ? "itms-apps://apps.apple.com/account/subscriptions"
     : "https://play.google.com/store/account/subscriptions";
 
-const TERMS_URL = "https://gist.github.com/francesco-saponaro/8fc0b7c3e435c4880cca34b70526adf4";
-const PRIVACY_URL = "https://gist.github.com/francesco-saponaro/8fc0b7c3e435c4880cca34b70526adf4";
+const TERMS_URL =
+  "https://gist.github.com/francesco-saponaro/8fc0b7c3e435c4880cca34b70526adf4";
+const PRIVACY_URL =
+  "https://gist.github.com/francesco-saponaro/8fc0b7c3e435c4880cca34b70526adf4";
 const FEEDBACK_EMAIL = "mailto:hello@getpresenceapp.com";
 
 const APP_VERSION = Constants.expoConfig?.version ?? "1.0.0";
@@ -64,7 +68,14 @@ interface RowProps {
   hideChevron?: boolean;
 }
 
-function Row({ icon, label, value, onPress, destructive, hideChevron }: RowProps) {
+function Row({
+  icon,
+  label,
+  value,
+  onPress,
+  destructive,
+  hideChevron,
+}: RowProps) {
   const labelColor = destructive
     ? "text-red-400"
     : "text-text-dark dark:text-text-light";
@@ -147,7 +158,9 @@ export default function ProfileScreen() {
   const currentLangLabel =
     LANGUAGES.find((l) => l.code === language)?.label ?? "English";
 
-  const blockTimeLabel = blockTimeUtc ? formatBlockTime(blockTimeUtc) : t("profile.notSet");
+  const blockTimeLabel = blockTimeUtc
+    ? formatBlockTime(blockTimeUtc)
+    : t("profile.notSet");
   const frequencyLabel = frequency
     ? t(`onboarding.step4.${frequency === "5x" ? "fiveX" : frequency}`)
     : t("profile.notSet");
@@ -164,6 +177,15 @@ export default function ProfileScreen() {
   }
 
   function handleRemoveContact(name: string) {
+    if (trustedContacts.length <= 1) {
+      Toast.show({
+        type: "info",
+        text1: t("profile.trustedContactsMinOneTitle"),
+        text2: t("profile.trustedContactsMinOneBody"),
+        visibilityTime: 3000,
+      });
+      return;
+    }
     const updated = trustedContacts.filter((c) => c !== name);
     setTrustedContacts(updated);
     syncContactsToSupabase(updated).catch(() => {});
@@ -215,13 +237,13 @@ export default function ProfileScreen() {
             router.replace("/(auth)/login");
           },
         },
-      ]
+      ],
     );
   }
 
   function openLink(url: string) {
     Linking.openURL(url).catch(() =>
-      Toast.show({ type: "error", text1: t("common.error") })
+      Toast.show({ type: "error", text1: t("common.error") }),
     );
   }
 
@@ -246,9 +268,13 @@ export default function ProfileScreen() {
 
   const renderBackdrop = useCallback(
     (props: BottomSheetBackdropProps) => (
-      <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} />
+      <BottomSheetBackdrop
+        {...props}
+        disappearsOnIndex={-1}
+        appearsOnIndex={0}
+      />
     ),
-    []
+    [],
   );
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -256,7 +282,10 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView className="flex-1 bg-milk dark:bg-espresso" edges={["top"]}>
       <ScrollView
-        contentContainerStyle={{ flexGrow: 1, paddingBottom: Math.max(insets.bottom, 32) }}
+        contentContainerStyle={{
+          flexGrow: 1,
+          paddingBottom: Math.max(insets.bottom, 32),
+        }}
         showsVerticalScrollIndicator={false}
       >
         {/* ── Header ── */}
@@ -301,7 +330,9 @@ export default function ProfileScreen() {
             label={t("profile.trustedContacts")}
             value={
               trustedContacts.length > 0
-                ? t("profile.trustedContactsCount", { count: trustedContacts.length })
+                ? t("profile.trustedContactsCount", {
+                    count: trustedContacts.length,
+                  })
                 : undefined
             }
             onPress={() => contactsSheetRef.current?.present()}
@@ -381,21 +412,24 @@ export default function ProfileScreen() {
       {/* ── Feedback bottom sheet ── */}
       <BottomSheetModal
         ref={feedbackSheetRef}
-        snapPoints={["55%"]}
         enablePanDownToClose
-        keyboardBehavior="extend"
+        keyboardBehavior="interactive"
+        keyboardBlurBehavior="restore"
+        android_keyboardInputMode="adjustResize"
         backdropComponent={renderBackdrop}
         backgroundStyle={{ backgroundColor: "#EBE6DF" }}
         handleIndicatorStyle={{ backgroundColor: "#C6C0B9" }}
       >
-        <BottomSheetView style={{ flex: 1, paddingHorizontal: 24, paddingBottom: 24 }}>
+        <BottomSheetView
+          style={{ flex: 1, paddingHorizontal: 24, paddingBottom: 24 }}
+        >
           <Text className="font-serif-display text-xl text-text-dark mb-1">
             {t("profile.feedback")}
           </Text>
           <Text className="font-sans-body text-sm text-greige mb-5">
             We read every message.
           </Text>
-          <TextInput
+          <BottomSheetTextInput
             value={feedbackMessage}
             onChangeText={setFeedbackMessage}
             placeholder="What's on your mind?"
@@ -428,7 +462,13 @@ export default function ProfileScreen() {
               opacity: sendingFeedback || !feedbackMessage.trim() ? 0.5 : 1,
             }}
           >
-            <Text style={{ fontFamily: "DMSans-Medium", fontSize: 16, color: "#FDFBF7" }}>
+            <Text
+              style={{
+                fontFamily: "DMSans-Medium",
+                fontSize: 16,
+                color: "#FDFBF7",
+              }}
+            >
               {sendingFeedback ? t("common.loading") : "Send"}
             </Text>
           </TouchableOpacity>
@@ -441,95 +481,99 @@ export default function ProfileScreen() {
         snapPoints={["70%"]}
         enablePanDownToClose
         keyboardBehavior="extend"
+        keyboardBlurBehavior="restore"
+        android_keyboardInputMode="adjustResize"
         backdropComponent={renderBackdrop}
         backgroundStyle={{ backgroundColor: "#EBE6DF" }}
         handleIndicatorStyle={{ backgroundColor: "#C6C0B9" }}
       >
-        <BottomSheetView style={{ flex: 1, paddingHorizontal: 24, paddingBottom: 24 }}>
-          <Text className="font-serif-display text-xl text-text-dark mb-1">
-            {t("profile.trustedContactsSheet")}
-          </Text>
-          <Text className="font-sans-body text-xs text-greige mb-4">
-            {t("profile.trustedContactsHint")}
-          </Text>
-
-          {/* Add input */}
-          <View className="flex-row gap-3 mb-4">
-            <TextInput
-              value={contactInput}
-              onChangeText={setContactInput}
-              placeholder={t("profile.trustedContactsPlaceholder")}
-              placeholderTextColor="#C6C0B9"
-              returnKeyType="done"
-              onSubmitEditing={handleAddContact}
-              style={{
-                flex: 1,
-                backgroundColor: "#FAF7F2",
-                borderRadius: 14,
-                borderWidth: 1,
-                borderColor: "#C6C0B9",
-                paddingHorizontal: 14,
-                paddingVertical: 10,
-                fontFamily: "DMSans-Regular",
-                fontSize: 14,
-                color: "#2A1800",
-              }}
-            />
-            <TouchableOpacity
-              onPress={handleAddContact}
-              disabled={!contactInput.trim()}
-              activeOpacity={0.8}
-              style={{
-                backgroundColor: !contactInput.trim() ? "#C6C0B9" : "#422701",
-                borderRadius: 14,
-                paddingHorizontal: 18,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Text style={{ fontFamily: "DMSans-Medium", fontSize: 14, color: "#FDFBF7" }}>
-                {t("profile.trustedContactsAdd")}
+        {/* BottomSheetFlatList must be the direct child so gorhom can measure height correctly.
+            Fixed header content lives in ListHeaderComponent. */}
+        <BottomSheetFlatList
+          data={trustedContacts}
+          keyExtractor={(item) => item}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 32 }}
+          ListHeaderComponent={
+            <View style={{ paddingTop: 4, paddingBottom: 12 }}>
+              <Text className="font-serif-display text-xl text-text-dark mb-1">
+                {t("profile.trustedContactsSheet")}
               </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Contact list */}
-          {trustedContacts.length === 0 ? (
+              <Text className="font-sans-body text-xs text-greige mb-4">
+                {t("profile.trustedContactsHint")}
+              </Text>
+              <View className="flex-row gap-3 mb-4">
+                <BottomSheetTextInput
+                  value={contactInput}
+                  onChangeText={setContactInput}
+                  placeholder={t("profile.trustedContactsPlaceholder")}
+                  placeholderTextColor="#C6C0B9"
+                  returnKeyType="done"
+                  onSubmitEditing={handleAddContact}
+                  style={{
+                    flex: 1,
+                    backgroundColor: "#FAF7F2",
+                    borderRadius: 14,
+                    borderWidth: 1,
+                    borderColor: "#C6C0B9",
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                    fontFamily: "DMSans-Regular",
+                    fontSize: 14,
+                    color: "#2A1800",
+                  }}
+                />
+                <TouchableOpacity
+                  onPress={handleAddContact}
+                  disabled={!contactInput.trim()}
+                  activeOpacity={0.8}
+                  style={{
+                    backgroundColor: !contactInput.trim() ? "#C6C0B9" : "#422701",
+                    borderRadius: 14,
+                    paddingHorizontal: 18,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Text style={{ fontFamily: "DMSans-Medium", fontSize: 14, color: "#FDFBF7" }}>
+                    {t("profile.trustedContactsAdd")}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <View className="h-px bg-greige/30" />
+            </View>
+          }
+          ListEmptyComponent={
             <Text className="font-sans-body text-sm text-greige text-center mt-4">
               {t("profile.trustedContactsEmpty")}
             </Text>
-          ) : (
-            <FlatList
-              data={trustedContacts}
-              keyExtractor={(item) => item}
-              ItemSeparatorComponent={() => (
-                <View className="h-px bg-greige/30 mx-1" />
-              )}
-              renderItem={({ item }) => (
-                <View className="flex-row items-center py-3">
-                  <View
-                    className="w-8 h-8 rounded-full items-center justify-center mr-3"
-                    style={{ backgroundColor: "rgba(214,181,136,0.25)" }}
-                  >
-                    <Text style={{ fontFamily: "DMSans-Medium", fontSize: 13, color: "#422701" }}>
-                      {item[0].toUpperCase()}
-                    </Text>
-                  </View>
-                  <Text className="flex-1 font-sans-medium text-base text-text-dark">
-                    {item}
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => handleRemoveContact(item)}
-                    hitSlop={8}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="close-circle" size={22} color="#C6C0B9" />
-                  </TouchableOpacity>
-                </View>
-              )}
-            />
+          }
+          ItemSeparatorComponent={() => (
+            <View className="h-px bg-greige/30 mx-1" />
           )}
-        </BottomSheetView>
+          renderItem={({ item }) => (
+            <View className="flex-row items-center py-3">
+              <View
+                className="w-8 h-8 rounded-full items-center justify-center mr-3"
+                style={{ backgroundColor: "rgba(214,181,136,0.25)" }}
+              >
+                <Text style={{ fontFamily: "DMSans-Medium", fontSize: 13, color: "#422701" }}>
+                  {item[0].toUpperCase()}
+                </Text>
+              </View>
+              <Text className="flex-1 font-sans-medium text-base text-text-dark">
+                {item}
+              </Text>
+              <TouchableOpacity
+                onPress={() => handleRemoveContact(item)}
+                hitSlop={8}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close-circle" size={22} color="#C6C0B9" />
+              </TouchableOpacity>
+            </View>
+          )}
+        />
       </BottomSheetModal>
 
       {/* ── Language picker bottom sheet ── */}
@@ -541,7 +585,9 @@ export default function ProfileScreen() {
         backgroundStyle={{ backgroundColor: "#EBE6DF" }}
         handleIndicatorStyle={{ backgroundColor: "#C6C0B9" }}
       >
-        <BottomSheetView style={{ flex: 1, paddingHorizontal: 24, paddingBottom: 24 }}>
+        <BottomSheetView
+          style={{ flex: 1, paddingHorizontal: 24, paddingBottom: 24 }}
+        >
           <Text className="font-serif-display text-xl text-text-dark mb-4">
             {t("profile.langPickerTitle")}
           </Text>

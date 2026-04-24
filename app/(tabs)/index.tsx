@@ -1,25 +1,36 @@
-import { useState, useEffect } from "react";
+import LogoPng from "@/assets/images/logo-app.png";
+import { PillButton } from "@/components/ui/PillButton";
+import { runOCRValidation } from "@/lib/ocr";
 import {
-  View,
+  checkAndUpdateShield,
+  onConnectionVerified,
+  syncPendingConnections,
+} from "@/lib/shieldEngine";
+import { supabase } from "@/lib/supabase";
+import { formatBlockTime, formatCountdown } from "@/lib/timezone";
+import { useRoutineStore } from "@/store/routine";
+import { useShieldStore } from "@/store/shield";
+import { useUserStore } from "@/store/userStore";
+import * as Haptics from "expo-haptics";
+import { Image } from "expo-image";
+import * as ImagePicker from "expo-image-picker";
+import * as StoreReview from "expo-store-review";
+import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import {
+  ActivityIndicator,
+  Alert,
+  RefreshControl,
+  ScrollView,
   Text,
   TouchableOpacity,
-  ActivityIndicator,
-  ScrollView,
-  Alert,
+  View,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { useTranslation } from "react-i18next";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import Toast from "react-native-toast-message";
-import * as ImagePicker from "expo-image-picker";
-import * as Haptics from "expo-haptics";
-import * as StoreReview from "expo-store-review";
-import { useShieldStore } from "@/store/shield";
-import { useRoutineStore } from "@/store/routine";
-import { useUserStore } from "@/store/userStore";
-import { isBlockTimeActive, formatBlockTime, formatCountdown } from "@/lib/timezone";
-import { runOCRValidation } from "@/lib/ocr";
-import { onConnectionVerified } from "@/lib/shieldEngine";
-import { PillButton } from "@/components/ui/PillButton";
 
 export default function HomeScreen() {
   const { t } = useTranslation();
@@ -34,9 +45,44 @@ export default function HomeScreen() {
   const trustedContacts = useRoutineStore((s) => s.trustedContacts);
 
   const connections = useUserStore((s) => s.lifetimeSuccessfulConnections);
+  const streak = useUserStore((s) => s.currentStreak);
+
+  const setStats = useUserStore((s) => s.setStats);
 
   const [isVerifying, setIsVerifying] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [countdown, setCountdown] = useState<string>("");
+
+  // Pull-to-refresh
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      // Re-evaluate shield schedule and sync any pending offline connections
+      await Promise.all([checkAndUpdateShield(), syncPendingConnections()]);
+
+      // Re-fetch profile stats from Supabase so multi-device values are reflected
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session) {
+        const { data } = await supabase
+          .from("profiles")
+          .select("lifetime_connections, current_streak")
+          .eq("id", session.user.id)
+          .single();
+        if (data) {
+          setStats(data.lifetime_connections, data.current_streak);
+        }
+      }
+
+      // Recalculate countdown immediately rather than waiting for the next tick
+      if (blockTimeUtc) setCountdown(formatCountdown(blockTimeUtc));
+    } catch {
+      // Silently swallow — the UI already shows the latest local state
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [blockTimeUtc, setStats]);
 
   // Live countdown ticker
   useEffect(() => {
@@ -90,21 +136,17 @@ export default function HomeScreen() {
   }
 
   async function handleBypass() {
-    Alert.alert(
-      t("shield.bypass"),
-      t("shield.bypassConfirm"),
-      [
-        { text: t("common.back"), style: "cancel" },
-        {
-          text: t("shield.bypass"),
-          style: "destructive",
-          onPress: async () => {
-            await onConnectionVerified(true);
-            Toast.show({ type: "info", text1: t("shield.bypassConfirm") });
-          },
+    Alert.alert(t("shield.bypass"), t("shield.bypassConfirm"), [
+      { text: t("common.back"), style: "cancel" },
+      {
+        text: t("shield.bypass"),
+        style: "destructive",
+        onPress: async () => {
+          await onConnectionVerified(true);
+          Toast.show({ type: "info", text1: t("shield.bypassConfirm") });
         },
-      ]
-    );
+      },
+    ]);
   }
 
   // ── Derived state ───────────────────────────────────────────────────────────
@@ -120,15 +162,30 @@ export default function HomeScreen() {
       <ScrollView
         contentContainerStyle={{ flexGrow: 1 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            tintColor="#705E46"
+            colors={["#705E46"]}
+          />
+        }
       >
         <View
           className="flex-1 px-6"
           style={{ paddingBottom: Math.max(insets.bottom, 24) }}
         >
-          {/* ── Wordmark ── */}
-          <Text className="font-serif-display text-lg text-brown-mid dark:text-tan text-center mt-6 mb-12 tracking-widest uppercase">
-            Presence
-          </Text>
+          {/* ── Logo ── */}
+          <View className="items-center mt-6 mb-8ok">
+            <Image
+              source={LogoPng}
+              style={{ width: 240, height: 80 }}
+              contentFit="cover"
+            />
+            <Text className="font-serif-display text-lg text-brown-mid dark:text-tan text-center mb-10 tracking-widest uppercase">
+              Presence
+            </Text>
+          </View>
 
           {/* ── Main status card ── */}
           <View
@@ -153,7 +210,9 @@ export default function HomeScreen() {
               <Text
                 className={[
                   "text-3xl",
-                  isBlocked ? "text-text-light dark:text-espresso" : "text-greige",
+                  isBlocked
+                    ? "text-text-light dark:text-espresso"
+                    : "text-greige",
                 ].join(" ")}
               >
                 {isBlocked ? "⬛" : "○"}
@@ -170,8 +229,8 @@ export default function HomeScreen() {
               {isBlocked
                 ? t("shield.title")
                 : hasRoutine && countdown
-                ? t("home.unblockedSub", { time: countdown })
-                : t("home.noRoutine")}
+                  ? t("home.unblockedSub", { time: countdown })
+                  : t("home.noRoutine")}
             </Text>
 
             {/* Block time label */}
@@ -188,11 +247,7 @@ export default function HomeScreen() {
           {isBlocked && (
             <View className="gap-3">
               <PillButton
-                label={
-                  isVerifying
-                    ? t("home.uploading")
-                    : t("home.upload")
-                }
+                label={isVerifying ? t("home.uploading") : t("home.upload")}
                 variant="primary"
                 disabled={isVerifying}
                 onPress={handleUploadProof}
@@ -223,13 +278,29 @@ export default function HomeScreen() {
           {/* ── Stats footer ── */}
           <View className="mt-auto pt-12">
             <View className="h-px bg-greige/40 dark:bg-brown-mid/30 mb-6" />
-            <View className="flex-row justify-center items-baseline gap-2">
-              <Text className="font-serif-display text-3xl text-brown-dark dark:text-tan">
-                {connections}
-              </Text>
-              <Text className="font-sans-body text-sm text-brown-mid dark:text-greige">
-                {t("home.connectionsLabel")}
-              </Text>
+            <View className="flex-row justify-around">
+              {/* Genuine connections */}
+              <View className="items-center gap-1">
+                <Text className="font-serif-display text-4xl text-brown-dark dark:text-tan">
+                  {connections}
+                </Text>
+                <Text className="font-sans-medium text-xs text-brown-mid dark:text-greige uppercase tracking-wider text-center">
+                  {t("home.connectionsLabel")}
+                </Text>
+              </View>
+
+              {/* Vertical divider */}
+              <View className="w-px bg-greige/40 dark:bg-brown-mid/30" />
+
+              {/* Day streak */}
+              <View className="items-center gap-1">
+                <Text className="font-serif-display text-4xl text-brown-dark dark:text-tan">
+                  {streak}
+                </Text>
+                <Text className="font-sans-medium text-xs text-brown-mid dark:text-greige uppercase tracking-wider text-center">
+                  {t("home.streakLabel")}
+                </Text>
+              </View>
             </View>
           </View>
         </View>

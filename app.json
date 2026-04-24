@@ -46,8 +46,8 @@
         "expo-splash-screen",
         {
           "image": "./assets/images/logo-app.png",
-          "imageWidth": 200,
-          "resizeMode": "contain",
+          "imageWidth": 300,
+          "resizeMode": "cover",
           "backgroundColor": "#FAF7F2",
           "dark": {
             "backgroundColor": "#261B10"
@@ -73,7 +73,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/logo-android.png",
+          "icon": "./assets/images/logo-ios.png",
           "color": "#D6B588",
           "defaultChannel": "presence-reminders"
         }
