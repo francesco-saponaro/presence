@@ -93,7 +93,13 @@
               "appExtensions": [
                 {
                   "targetName": "PresenceMonitor",
-                  "bundleIdentifier": "com.franciccio.presence.PresenceMonitor"
+                  "bundleIdentifier": "com.franciccio.presence.PresenceMonitor",
+                  "entitlements": {
+                    "com.apple.developer.family-controls": true,
+                    "com.apple.security.application-groups": [
+                      "group.com.franciccio.presence"
+                    ]
+                  }
                 }
               ]
             }
