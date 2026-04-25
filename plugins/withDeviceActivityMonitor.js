@@ -351,12 +351,16 @@ function withExtensionScheme(config) {
   ]);
 }
 
-// ── Step 6: Declare empty Podfile target ─────────────────────────────────────
+// ── Step 6: Declare extension target INSIDE the host target in the Podfile ───
 //
-// Without this, CocoaPods sees an "unconfigured" native target in the project
-// and may apply post-install scripts (including Hermes-related script phases)
-// to it.  An explicit empty target block tells CocoaPods "this target has no
-// pods" and prevents any automatic integration.
+// CocoaPods requires app extension targets to be nested inside their host
+// target's block.  A top-level `target 'PresenceMonitor' do end` raises:
+//   "Unable to find host target(s) for PresenceMonitor"
+//
+// We insert the extension block just before the final `end` that closes
+// the `target 'Presence' do` block (the last `\nend` in the Podfile).
+// `inherit! :search_paths` is the CocoaPods convention for extensions —
+// it passes header search paths from the host without inheriting pod deps.
 
 function withExtensionPodfile(config) {
   return withDangerousMod(config, [
@@ -371,12 +375,33 @@ function withExtensionPodfile(config) {
 
       if (contents.includes(`target '${EXTENSION_NAME}'`)) return cfg;
 
+      // The Expo-generated Podfile always ends with the closing `end` of
+      // `target 'Presence' do`.  Insert the extension block just before it.
+      const trimmed = contents.trimEnd();
+      const lastEnd = trimmed.lastIndexOf("\nend");
+      if (lastEnd === -1) {
+        console.warn(
+          "[withDeviceActivityMonitor] Could not locate closing `end` in Podfile — skipping"
+        );
+        return cfg;
+      }
+
+      const extensionBlock =
+        `\n\n  target '${EXTENSION_NAME}' do\n` +
+        `    inherit! :search_paths\n` +
+        `    # No pods needed — DeviceActivityMonitor uses only Apple system frameworks\n` +
+        `  end`;
+
       contents =
-        contents.trimEnd() +
-        `\n\n# ${EXTENSION_NAME} — DeviceActivityMonitor extension, no pods needed\ntarget '${EXTENSION_NAME}' do\nend\n`;
+        trimmed.slice(0, lastEnd) +
+        extensionBlock +
+        trimmed.slice(lastEnd) +
+        "\n";
 
       fs.writeFileSync(podfilePath, contents, "utf8");
-      console.log(`✅ Added empty ${EXTENSION_NAME} target to Podfile`);
+      console.log(
+        `✅ Added ${EXTENSION_NAME} target inside Presence host target in Podfile`
+      );
       return cfg;
     },
   ]);
