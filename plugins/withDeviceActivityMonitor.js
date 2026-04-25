@@ -35,12 +35,31 @@ function withExtensionFiles(config) {
       if (fs.existsSync(swiftSrc))
         fs.copyFileSync(swiftSrc, path.join(extDir, "PresenceMonitor.swift"));
 
+      // CRITICAL FIX: Added standard CFBundle keys so Xcode can validate the identifier
       fs.writeFileSync(
         path.join(extDir, `${EXTENSION_NAME}-Info.plist`),
         `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>$(DEVELOPMENT_LANGUAGE)</string>
+    <key>CFBundleDisplayName</key>
+    <string>${EXTENSION_NAME}</string>
+    <key>CFBundleExecutable</key>
+    <string>$(EXECUTABLE_NAME)</string>
+    <key>CFBundleIdentifier</key>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>$(PRODUCT_NAME)</string>
+    <key>CFBundlePackageType</key>
+    <string>XPC!</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
     <key>NSExtension</key>
     <dict>
         <key>NSExtensionPointIdentifier</key>
@@ -156,15 +175,60 @@ function withExtensionTarget(config) {
       });
     }
 
-    // --- CRITICAL FIX: Safe Embedding Logic ---
-    xcodeProject.addBuildPhase(
-      [],
-      "PBXCopyFilesBuildPhase",
-      "Embed App Extensions",
-      mainTarget.uuid,
-      "app_extension",
-      "",
-    );
+    const objects = xcodeProject.hash.project.objects;
+    let extProductRef = null;
+    Object.entries(objects["PBXNativeTarget"] || {}).forEach(([, t]) => {
+      if (
+        t &&
+        typeof t === "object" &&
+        (t.name === EXTENSION_NAME || t.name === `"${EXTENSION_NAME}"`)
+      ) {
+        extProductRef = t.productReference;
+      }
+    });
+
+    if (extProductRef) {
+      const buildFileUUID = xcodeProject.generateUuid();
+      if (!objects["PBXBuildFile"]) objects["PBXBuildFile"] = {};
+      objects["PBXBuildFile"][buildFileUUID] = {
+        isa: "PBXBuildFile",
+        fileRef: extProductRef,
+        fileRef_comment: `${EXTENSION_NAME}.appex`,
+        settings: { ATTRIBUTES: ["RemoveHeadersOnCopy"] },
+      };
+      objects["PBXBuildFile"][`${buildFileUUID}_comment`] =
+        `${EXTENSION_NAME}.appex in Embed App Extensions`;
+
+      const embedPhaseUUID = xcodeProject.generateUuid();
+      if (!objects["PBXCopyFilesBuildPhase"])
+        objects["PBXCopyFilesBuildPhase"] = {};
+      objects["PBXCopyFilesBuildPhase"][embedPhaseUUID] = {
+        isa: "PBXCopyFilesBuildPhase",
+        buildActionMask: 2147483647,
+        dstPath: `""`,
+        dstSubfolderSpec: 13,
+        files: [
+          {
+            value: buildFileUUID,
+            comment: `${EXTENSION_NAME}.appex in Embed App Extensions`,
+          },
+        ],
+        name: `"Embed App Extensions"`,
+        runOnlyForDeploymentPostprocessing: 0,
+      };
+      objects["PBXCopyFilesBuildPhase"][`${embedPhaseUUID}_comment`] =
+        "Embed App Extensions";
+
+      const mainTargetObj = objects["PBXNativeTarget"][mainTarget.uuid];
+      if (mainTargetObj && Array.isArray(mainTargetObj.buildPhases)) {
+        mainTargetObj.buildPhases.push({
+          value: embedPhaseUUID,
+          comment: "Embed App Extensions",
+        });
+      }
+
+      xcodeProject.addTargetDependency(mainTarget.uuid, [extTarget.uuid]);
+    }
 
     return cfg;
   });
