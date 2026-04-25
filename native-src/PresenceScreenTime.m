@@ -19,4 +19,14 @@ RCT_EXTERN_METHOD(applyShieldFromSelection:(NSString *)base64
 RCT_EXTERN_METHOD(clearShield:(RCTPromiseResolveBlock)resolve
                   reject:(RCTPromiseRejectBlock)reject)
 
+RCT_EXTERN_METHOD(scheduleMonitoring:(NSString *)selectionBase64
+                  localHour:(double)localHour
+                  localMinute:(double)localMinute
+                  frequency:(NSString *)frequency
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(stopMonitoring:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+
 @end

@@ -16,9 +16,22 @@ interface ScreenTimeModuleType {
   getAuthorizationStatus(): Promise<"approved" | "denied" | "notDetermined" | "unknown">;
   /** Shield specific apps by bundle ID (falls back to .all() if tokens are nil). */
   applyShield(bundleIds: string[]): Promise<{ tokensApplied: number; appsFound: number } | null>;
-  /** Shield only the apps from a FamilyActivitySelection (base64-encoded). */
+  /** Shield only the apps from a FamilyActivitySelection (base64-encoded). Also writes selection to App Group UserDefaults for the DeviceActivityMonitor extension. */
   applyShieldFromSelection(base64: string): Promise<void>;
   clearShield(): Promise<void>;
+  /**
+   * Schedules the DeviceActivityMonitor extension to block apps at the given
+   * LOCAL time every day (extension filters weekdays/weekends internally).
+   * Must be called whenever the routine is saved or updated.
+   */
+  scheduleMonitoring(
+    selectionBase64: string,
+    localHour: number,
+    localMinute: number,
+    frequency: string
+  ): Promise<void>;
+  /** Stops all DeviceActivity monitoring (call when routine is disabled). */
+  stopMonitoring(): Promise<void>;
 }
 
 function buildScreenTimeStub(): ScreenTimeModuleType {
@@ -30,6 +43,8 @@ function buildScreenTimeStub(): ScreenTimeModuleType {
     applyShield: w,
     applyShieldFromSelection: w,
     clearShield: w,
+    scheduleMonitoring: () => Promise.resolve(),
+    stopMonitoring: () => Promise.resolve(),
   };
 }
 
@@ -100,8 +115,31 @@ export interface PickerApp {
 export interface PickerResult {
   /** Base64-encoded FamilyActivitySelection — pass to ScreenTimeModule.applyShieldFromSelection */
   selection: string;
-  /** Apps the user selected, with bundle IDs and display names */
+  /**
+   * Always empty on iOS — Apple does not expose bundle IDs from FamilyActivityPicker
+   * tokens by design. Use countAppsInSelection(selection) to get the app count instead.
+   */
   apps: PickerApp[];
+}
+
+/**
+ * Parse a base64-encoded FamilyActivitySelection and return the total number of
+ * selected items (applicationTokens + categoryTokens).
+ * Returns 0 on any parse error.
+ */
+export function countAppsInSelection(base64: string | null | undefined): number {
+  if (!base64) return 0;
+  try {
+    const json = atob(base64);
+    const parsed = JSON.parse(json) as {
+      applicationTokens?: unknown[];
+      categoryTokens?: unknown[];
+    };
+    return (parsed.applicationTokens?.length ?? 0) +
+           (parsed.categoryTokens?.length ?? 0);
+  } catch {
+    return 0;
+  }
 }
 
 interface PickerModuleType {

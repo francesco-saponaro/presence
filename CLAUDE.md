@@ -20,7 +20,7 @@
 - **Alerts/Feedback:** `react-native-toast-message` (For all success, error, and info toasts).
 - **Notifications:** `expo-notifications` (local push only — no Expo push server).
 - **Native Modules (Cross-Platform):** Custom Swift (iOS) and Kotlin (Android) code injected via Expo Config Plugins.
-  - **iOS:** Apple `FamilyControls`, `ManagedSettings`, `DeviceActivity`, and Apple `Vision` framework (OCR).
+  - **iOS:** Apple `FamilyControls`, `ManagedSettings`, `DeviceActivity`, Apple `Vision` framework (OCR), and SwiftUI `FamilyActivityPicker` (app selection). The picker is exposed as the `PresencePicker` native module (`native-src/PresencePicker.swift` + `native-src/PresencePicker.m`). Requires iOS 16+.
   - **Android:** `UsageStatsManager` (App detection), `SYSTEM_ALERT_WINDOW` (Overlay Shield), and Google `ML Kit Vision` (OCR).
 - **i18n:** `react-i18next` natively supporting English (en), Spanish (es), French (fr), Italian (it), and Portuguese (pt).
 - **App Rating:** `expo-store-review` (For strategic App Store rating prompts).
@@ -149,6 +149,7 @@ All post-auth navigation is centralised in two places — never scatter `router.
   - **Schedule row** shows the current time and frequency as a combined value (e.g. "8:00 PM · Daily"). Navigating to `app/block-time.tsx` gives a full-screen settings page (no onboarding UI) with the same time card + frequency pills; tapping Save updates the store and syncs to Supabase.
   - **Blocked Apps row** navigates to `app/blocked-apps.tsx` — same iOS picker / Android checkbox flow as onboarding but as a standalone settings page. Save updates the store and syncs to Supabase.
   - **CRITICAL:** Profile never navigates into `(onboarding)` routes for post-onboarding users. Always use the dedicated settings pages.
+  - Both `app/block-time.tsx` and `app/blocked-apps.tsx` are registered as root-level `<Stack.Screen>` entries in `app/_layout.tsx` so they slide in from the right as a standard push navigation.
   - **Trusted Contacts** opens a `BottomSheetModal` (`snapPoints: ["70%"]`) where contacts can be added (text input) or removed (×). Every change is immediately written to Zustand and synced to Supabase via `syncContactsToSupabase()`.
 - **Footer:** Must include Copyright info, Logo, and "Manage Subscription" (RevenueCat customer portal).
 
@@ -178,6 +179,12 @@ All post-auth navigation is centralised in two places — never scatter `router.
 
 - **Supabase:** Schema must track user profiles, connection proof successes (stats), and selected routines. See `supabase/schema.sql` for the full schema. Edge functions live in `supabase/functions/`. The `routines` table has a `trusted_contacts text[] not null default '{}'` column — run the migration on existing databases: `alter table public.routines add column if not exists trusted_contacts text[] not null default '{}';`
 - **`lib/routineSync.ts`:** Two helpers for writing routine data to Supabase: `syncRoutineToSupabase()` — full upsert of all routine fields (blockTime, frequency, apps, trustedContacts); `syncContactsToSupabase(contacts)` — targeted UPDATE of only `trusted_contacts`, falling back to a full upsert if no row exists yet. Call `syncContactsToSupabase` whenever contacts change (onboarding completion and profile edits).
+- **`store/routine.ts` fields:**
+  - `blockTimeUtc: string | null` — UTC ISO string encoding the local block hour (use `getLocalBlockTime()` from `lib/timezone.ts` to convert back for display/pickers).
+  - `frequency: "daily" | "5x" | "weekends" | null`
+  - `blockedApps: string[]` — bundle IDs (iOS display / Supabase sync) or package names (Android blocking).
+  - `familyActivitySelection: string | null` — **iOS only.** Base64-encoded `FamilyActivitySelection` from `FamilyActivityPicker`. When present, `shieldEngine` calls `applyShieldFromSelection(base64)` instead of `applyShield(bundleIds)`. Never set this on Android.
+  - `trustedContacts: string[]` — names for OCR validation and psychological commitment.
 - **RevenueCat:** Handle paywall offerings, execute purchases, check entitlements. API keys are configured in `lib/purchases.ts`. The entitlement ID is `"premium"`. RevenueCat user is identified by Supabase user ID via `Purchases.logIn(userId)`.
 - **Edge Functions:** Four functions deployed via `supabase functions deploy <name>`:
   - `delete-account` — admin-deletes the auth user (cascades all DB rows).
@@ -230,10 +237,11 @@ To ensure the app feels native, robust, and cheat-proof, you must implement the 
 
 These were discovered during development and must be respected:
 
-1. **Apple FamilyControls — Production Entitlement Required:**
-   - The `com.apple.developer.family-controls` entitlement requires explicit approval from Apple for App Store distribution.
-   - For development builds, enable the capability in Apple Developer Portal (App Identifiers → Capabilities) and delete the cached EAS provisioning profile via `eas credentials --platform ios`.
-   - **Ad-hoc builds on Windows also cannot use the development FamilyControls entitlement** — only production-approved builds work. Wait for Apple's approval before testing FamilyControls on physical devices via ad-hoc distribution.
+1. **Apple FamilyControls — Entitlement & Provisioning Profile:**
+   - The `com.apple.developer.family-controls` entitlement must be enabled in Apple Developer Portal under App Identifiers → Capabilities.
+   - After enabling the capability, the EAS-cached provisioning profile will NOT include it. You must run `eas credentials --platform ios` to delete the cached profile, then rebuild — EAS will auto-generate a new profile that includes the entitlement.
+   - Without the correct provisioning profile, `ManagedSettingsStore` shield calls are silently ignored at runtime (no error thrown).
+   - FamilyControls **does** work in development builds once the provisioning profile includes the entitlement. The `ManagedSettingsStore` shield is active system-wide for the device.
 
 2. **Windows Cannot Prebuild iOS:**
    - `npx expo prebuild --platform ios --clean` on Windows is silently skipped.
@@ -300,7 +308,25 @@ These were discovered during development and must be respected:
    **Tap-through when keyboard is open:**
    - Add `keyboardShouldPersistTaps="handled"` to `BottomSheetFlatList` / `BottomSheetScrollView`. Without it, tapping a button (e.g. "Add") while the keyboard is open first dismisses the keyboard, consuming the tap — the button's `onPress` never fires and the user has to tap twice.
 
-14. **Password Reset Deep Link — Architecture (CRITICAL):**
+14. **`Application(bundleIdentifier:).token` Always Returns nil (CRITICAL):**
+   - Creating an `Application` directly from a bundle ID (`Application(bundleIdentifier: "com.burbn.instagram")`) always produces an object whose `.token` is `nil`. This is by Apple's API design — the FamilyControls framework intentionally does not allow apps to shield other apps by looking up bundle IDs directly.
+   - The **only** way to obtain valid `ApplicationToken`s is through `FamilyActivityPicker`. The picker returns a `FamilyActivitySelection` whose `.applicationTokens` is a `Set<ApplicationToken>` usable directly with `store.shield.applications`.
+   - Therefore the `PresencePicker` native module (`native-src/PresencePicker.swift`) must be used for app selection on iOS. The JS-side checkbox list is Android-only.
+   - `FamilyActivitySelection` conforms to `Codable` — encode with `JSONEncoder` → base64 string for Zustand storage, decode with `JSONDecoder` when applying the shield.
+
+15. **`ManagedSettingsStore` is Silently a No-Op Without Authorization:**
+   - Calling `store.shield.applications = tokens` or `store.shield.applicationCategories = .all()` has zero effect if `AuthorizationCenter.shared.authorizationStatus != .approved`. No error is thrown — the call just silently does nothing.
+   - Always check `getAuthorizationStatus()` in `shieldEngine.ts` before applying a shield. If not approved, call `requestAuthorization()` first. This is already implemented in the fallback path of `activateNativeShield`.
+   - The auth status is `.notDetermined` until the user goes through the Screen Time permissions step in onboarding. If the status is `.denied`, shielding is permanently disabled until the user re-enables Screen Time in iOS Settings.
+
+16. **Presenting SwiftUI (`FamilyActivityPicker`) from React Native:**
+   - `FamilyActivityPicker` is a SwiftUI view. To present it from a React Native native module, wrap it in a `UIHostingController` and present it modally on the main thread via `UIApplication.shared.connectedScenes`.
+   - Use an `ObservableObject` view model to pass completion callbacks (`onDone`, `onCancel`) into the SwiftUI view, capturing `[weak hostingController]` to avoid retain cycles.
+   - Always dispatch to `DispatchQueue.main.async` before any UIKit presentation.
+   - Do NOT store `RCTPromiseResolveBlock`/`RCTPromiseRejectBlock` as class properties — capture them via closures instead to keep things thread-safe.
+   - The `PresencePicker` module is in `native-src/PresencePicker.swift` + `native-src/PresencePicker.m`. Its JS wrapper is `PickerModule` in `lib/nativeModules.ts`. Call `PickerModule.show(initialBase64)` — pass the stored `familyActivitySelection` to pre-populate the picker on re-entry, or `null` on first launch.
+
+17. **Password Reset Deep Link — Architecture (CRITICAL):**
    - In implicit flow (current default, no `flowType: 'pkce'`), Supabase redirects to: `presence://reset-password#access_token=...&refresh_token=...&type=recovery`
    - **Hash fragments are NOT exposed via `useLocalSearchParams`** — only `?query` params are. The tokens live in the `#` fragment.
    - **`Linking.useURL()` / `Linking.getInitialURL()` alone are unreliable** in screens mounted after Expo Router's navigation completes — by that point the URL event may have already been consumed.
@@ -331,6 +357,7 @@ These items must be completed before submitting to App Store / Play Store:
 - [ ] **Supabase URL/keys:** Verify `lib/supabase.ts` has the production Supabase project URL and anon key.
 - [ ] **Trusted contacts DB migration:** Run `alter table public.routines add column if not exists trusted_contacts text[] not null default '{}';` on the existing Supabase database before deploying.
 - [ ] **Replace placeholder image in step-4-how:** `step-4-how.tsx` uses `onboarding-1.png` as a boilerplate. Replace with a dedicated final asset.
+- [ ] **iOS blocked-apps picker requires EAS build:** The `PresencePicker` native module (`FamilyActivityPicker`) is compiled only during EAS builds. The "Choose Apps to Block" button in `step-5-apps.tsx` and `app/blocked-apps.tsx` will crash on a bare JS reload until a native build is installed. Always test blocked-app selection on an EAS development build.
 - [ ] **App Store assets:** Icon, screenshots, description, age rating, privacy nutrition labels.
 - [ ] **Android Play Store:** Content rating questionnaire; privacy policy URL; target API level 34+.
 

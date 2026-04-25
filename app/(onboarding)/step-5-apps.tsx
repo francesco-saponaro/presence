@@ -8,7 +8,7 @@ import { useOnboardingStore } from "@/store/onboardingStore";
 import { useRoutineStore } from "@/store/routine";
 import { OnboardingProgress } from "@/components/ui/OnboardingProgress";
 import { PillButton } from "@/components/ui/PillButton";
-import { PickerModule, type PickerApp } from "@/lib/nativeModules";
+import { PickerModule, countAppsInSelection } from "@/lib/nativeModules";
 import Toast from "react-native-toast-message";
 
 // Android-only: hardcoded list of common apps to block
@@ -27,17 +27,17 @@ export default function Step5Apps() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const setCurrentStep = useOnboardingStore((s) => s.setCurrentStep);
-  const { setBlockedApps, setFamilyActivitySelection, familyActivitySelection, blockedApps } =
-    useRoutineStore();
+  const {
+    setBlockedApps,
+    setBlockedAppNames,
+    setFamilyActivitySelection,
+    familyActivitySelection,
+  } = useRoutineStore();
 
-  // iOS: track selected apps returned from the picker
-  const [iosApps, setIosApps] = useState<PickerApp[]>(() => {
-    // Re-hydrate display list from stored bundle IDs on re-entry
-    if (Platform.OS === "ios" && blockedApps.length > 0) {
-      return blockedApps.map((bundleId) => ({ bundleId }));
-    }
-    return [];
-  });
+  // iOS: count of selected items parsed from the persisted opaque selection
+  const [selectionCount, setSelectionCount] = useState(() =>
+    countAppsInSelection(familyActivitySelection)
+  );
   const [pickerLoading, setPickerLoading] = useState(false);
 
   // Android: checkbox selection state
@@ -64,10 +64,12 @@ export default function Step5Apps() {
     try {
       const result = await PickerModule.show(familyActivitySelection);
       if (result) {
-        setIosApps(result.apps);
+        const count = countAppsInSelection(result.selection);
+        setSelectionCount(count);
         setFamilyActivitySelection(result.selection);
-        // Also store bundle IDs in blockedApps for Supabase sync / display
-        setBlockedApps(result.apps.map((a) => a.bundleId));
+        // Apple doesn't expose bundle IDs from picker tokens — clear stale data
+        setBlockedApps([]);
+        setBlockedAppNames({});
       }
     } catch (e) {
       Toast.show({ type: "error", text1: "Could not open app picker" });
@@ -89,7 +91,7 @@ export default function Step5Apps() {
   }
 
   const canContinue =
-    Platform.OS === "ios" ? iosApps.length > 0 : selected.size > 0;
+    Platform.OS === "ios" ? selectionCount > 0 : selected.size > 0;
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -129,7 +131,7 @@ export default function Step5Apps() {
             <View className="flex-row items-center gap-3">
               <Ionicons name="apps-outline" size={22} color="#705E46" />
               <Text className="font-sans-medium text-base text-text-dark dark:text-text-light">
-                {iosApps.length > 0
+                {selectionCount > 0
                   ? t("onboarding.step5.changeApps")
                   : t("onboarding.step5.chooseApps")}
               </Text>
@@ -141,23 +143,12 @@ export default function Step5Apps() {
             )}
           </TouchableOpacity>
 
-          {/* Selected apps list */}
-          {iosApps.length > 0 && (
-            <View className="mt-4">
-              <Text className="font-sans-medium text-xs tracking-widest text-greige uppercase mb-3">
-                {t("onboarding.step5.selectedApps")}
+          {selectionCount > 0 && (
+            <View className="mt-4 flex-row items-center gap-2 px-1">
+              <Ionicons name="checkmark-circle" size={16} color="#705E46" />
+              <Text className="font-sans-body text-sm text-brown-mid dark:text-greige">
+                {selectionCount} {selectionCount === 1 ? "app" : "apps"} selected
               </Text>
-              {iosApps.map((app) => (
-                <View
-                  key={app.bundleId}
-                  className="flex-row items-center py-3 border-b border-surface-light dark:border-surface-dark"
-                >
-                  <Ionicons name="checkmark-circle" size={18} color="#705E46" />
-                  <Text className="ml-3 font-sans-body text-sm text-text-dark dark:text-text-light">
-                    {app.name ?? app.bundleId}
-                  </Text>
-                </View>
-              ))}
             </View>
           )}
         </View>

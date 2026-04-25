@@ -13,19 +13,32 @@
  */
 
 import { AppState, AppStateStatus, Platform } from "react-native";
+import Toast from "react-native-toast-message";
 import { useShieldStore } from "@/store/shield";
 import { useRoutineStore } from "@/store/routine";
 import { useUserStore } from "@/store/userStore";
-import { isBlockTimeActive } from "./timezone";
-import { ScreenTimeModule, BlockerModule, addShieldActivatedListener, PickerModule } from "./nativeModules";
+import { isBlockTimeActive, getLocalBlockTime } from "./timezone";
+import { ScreenTimeModule, BlockerModule, addShieldActivatedListener } from "./nativeModules";
 import { supabase } from "./supabase";
 import { scheduleInactivityNotification } from "./notifications";
+
+// Throttle the "Screen Time disabled" toast to once per app session.
+let _screenTimeWarningShown = false;
 
 // ── Native shield primitives ─────────────────────────────────────────────────
 
 async function activateNativeShield(blockedApps: string[]): Promise<void> {
   if (Platform.OS === "ios") {
     try {
+      // Always check auth first — ManagedSettingsStore is a silent no-op without it
+      const authStatus = await ScreenTimeModule.getAuthorizationStatus();
+      console.log("[shieldEngine] FamilyControls auth status:", authStatus);
+      if (authStatus !== "approved") {
+        await ScreenTimeModule.requestAuthorization().catch((e: unknown) =>
+          console.warn("[shieldEngine] requestAuthorization failed:", JSON.stringify(e))
+        );
+      }
+
       const { familyActivitySelection } = useRoutineStore.getState();
       if (familyActivitySelection) {
         // Use real ApplicationTokens from FamilyActivityPicker — specific app blocking
@@ -35,13 +48,6 @@ async function activateNativeShield(blockedApps: string[]): Promise<void> {
       } else {
         // No picker selection yet — fall back to bundle ID method
         // (will fall back to .all() categories internally if tokens are nil)
-        const authStatus = await ScreenTimeModule.getAuthorizationStatus();
-        console.log("[shieldEngine] FamilyControls auth status:", authStatus);
-        if (authStatus !== "approved") {
-          await ScreenTimeModule.requestAuthorization().catch((e: unknown) =>
-            console.warn("[shieldEngine] requestAuthorization failed:", JSON.stringify(e))
-          );
-        }
         const result = await ScreenTimeModule.applyShield(blockedApps);
         console.log("[shieldEngine] applyShield result:", JSON.stringify(result));
       }
@@ -73,10 +79,69 @@ export async function checkAndUpdateShield(): Promise<void> {
 
   console.log("[shieldEngine] checkAndUpdateShield:", { blockTimeUtc, frequency, blockedApps, isBlocked });
 
-  // No routine configured yet → nothing to do
-  if (!blockTimeUtc || !frequency || blockedApps.length === 0) {
-    console.log("[shieldEngine] no routine configured, skipping");
+  // No routine configured → clear stale shield and bail.
+  // iOS only needs blockTimeUtc + frequency (shield uses familyActivitySelection or .all() fallback).
+  // Android also needs blockedApps (package names drive UsageStatsManager).
+  const routineReady =
+    !!blockTimeUtc &&
+    !!frequency &&
+    (Platform.OS === "ios" || blockedApps.length > 0);
+
+  if (!routineReady) {
+    console.log("[shieldEngine] no routine configured, clearing any stale shield");
+    if (isBlocked) {
+      setBlocked(false);
+      await deactivateNativeShield();
+    }
     return;
+  }
+
+  // iOS: always check FamilyControls auth on foreground so we respond immediately
+  // when the user toggles Screen Time in Settings.
+  if (Platform.OS === "ios") {
+    try {
+      const authStatus = await ScreenTimeModule.getAuthorizationStatus();
+      console.log("[shieldEngine] auth status on check:", authStatus);
+
+      if (authStatus === "denied") {
+        // Screen Time was disabled in Settings. iOS does not allow
+        // requestAuthorization() to re-prompt — the user must re-enable manually.
+        if (!_screenTimeWarningShown) {
+          _screenTimeWarningShown = true;
+          Toast.show({
+            type: "error",
+            text1: "Screen Time disabled",
+            text2: "Re-enable Screen Time in Settings to keep Presence active.",
+            visibilityTime: 6000,
+          });
+        }
+        return; // nothing more we can do until user re-enables Screen Time
+      } else if (authStatus === "notDetermined") {
+        // Never authorised (fresh install or reset) — show the system prompt.
+        console.log("[shieldEngine] auth notDetermined, requesting...");
+        await ScreenTimeModule.requestAuthorization().catch((e: unknown) =>
+          console.warn("[shieldEngine] requestAuthorization failed:", JSON.stringify(e))
+        );
+      }
+      // "approved" → nothing to do, proceed normally
+    } catch {
+      // getAuthorizationStatus unavailable (simulator / old build) — ignore
+    }
+  }
+
+  // iOS: keep DeviceActivityMonitor schedule in sync so apps are blocked at
+  // block time even when Presence is not running.
+  if (Platform.OS === "ios") {
+    const { familyActivitySelection } = useRoutineStore.getState();
+    const { hour, minute } = getLocalBlockTime(blockTimeUtc!); // non-null: routineReady guard above
+    ScreenTimeModule.scheduleMonitoring(
+      familyActivitySelection ?? "",
+      hour,
+      minute,
+      frequency
+    ).catch((e: unknown) =>
+      console.warn("[shieldEngine] scheduleMonitoring failed:", JSON.stringify(e))
+    );
   }
 
   const shouldBlock = isBlockTimeActive(blockTimeUtc, frequency);
@@ -175,6 +240,7 @@ export async function syncPendingConnections(): Promise<void> {
  *   4. Opportunistic sync of any pending offline connections.
  */
 export function startShieldEngine(): () => void {
+  _screenTimeWarningShown = false; // reset per app session
   checkAndUpdateShield().catch(console.warn);
   syncPendingConnections().catch(console.warn);
 

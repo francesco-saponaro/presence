@@ -8,12 +8,12 @@ import { router } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import { useRoutineStore } from "@/store/routine";
-import { PickerModule, type PickerApp } from "@/lib/nativeModules";
+import { PickerModule, ScreenTimeModule, countAppsInSelection } from "@/lib/nativeModules";
+import { useShieldStore } from "@/store/shield";
 import { syncRoutineToSupabase } from "@/lib/routineSync";
 import { PillButton } from "@/components/ui/PillButton";
 import Toast from "react-native-toast-message";
 
-// Android list — same as onboarding
 const ANDROID_APPS = [
   { id: "instagram",  name: "Instagram",   color: "#E1306C", packageName: "com.instagram.android" },
   { id: "tiktok",     name: "TikTok",      color: "#010101", packageName: "com.zhiliaoapp.musically" },
@@ -33,12 +33,13 @@ export default function BlockedAppsScreen() {
     blockedApps,
     familyActivitySelection,
     setBlockedApps,
+    setBlockedAppNames,
     setFamilyActivitySelection,
   } = useRoutineStore();
 
-  // iOS: track selected apps for display
-  const [iosApps, setIosApps] = useState<PickerApp[]>(() =>
-    blockedApps.map((bundleId) => ({ bundleId }))
+  // iOS: count of selected items derived from the persisted selection
+  const [selectionCount, setSelectionCount] = useState(() =>
+    countAppsInSelection(familyActivitySelection)
   );
   const [pickerLoading, setPickerLoading] = useState(false);
 
@@ -60,39 +61,56 @@ export default function BlockedAppsScreen() {
   }
 
   // ── iOS picker ────────────────────────────────────────────────────────────
+  // Apple does not expose bundle IDs from FamilyActivityPicker tokens (privacy
+  // by design). We store the opaque FamilyActivitySelection for shielding and
+  // display a count derived by parsing the token array in the base64 payload.
 
   async function openPicker() {
     setPickerLoading(true);
     try {
       const result = await PickerModule.show(familyActivitySelection);
       if (result) {
-        setIosApps(result.apps);
+        const count = countAppsInSelection(result.selection);
+        setSelectionCount(count);
         setFamilyActivitySelection(result.selection);
-        setBlockedApps(result.apps.map((a) => a.bundleId));
+        // apps is always [] on iOS (Apple privacy) — clear bundle ID list
+        setBlockedApps([]);
+        setBlockedAppNames({});
+        syncRoutineToSupabase().catch(() => {});
+
+        // Re-apply (or clear) the native shield immediately so changes take
+        // effect without needing an app reload.
+        const { isBlocked, setBlocked } = useShieldStore.getState();
+        if (isBlocked) {
+          if (count > 0) {
+            ScreenTimeModule.applyShieldFromSelection(result.selection).catch(console.warn);
+          } else {
+            // User deselected everything — lift the shield
+            ScreenTimeModule.clearShield().catch(console.warn);
+            setBlocked(false);
+          }
+        }
+
+        Toast.show({ type: "success", text1: t("profile.appsSaved") });
       }
-    } catch {
+    } catch (e) {
+      console.warn("[blocked-apps] picker error:", e);
       Toast.show({ type: "error", text1: "Could not open app picker" });
     } finally {
       setPickerLoading(false);
     }
   }
 
-  // ── Save ──────────────────────────────────────────────────────────────────
+  // ── Android save ──────────────────────────────────────────────────────────
 
-  async function handleSave() {
-    if (Platform.OS === "android") {
-      setBlockedApps(
-        ANDROID_APPS.filter((a) => selected.has(a.id)).map((a) => a.packageName)
-      );
-    }
-    // iOS: already saved directly via openPicker → just sync and go back
+  async function handleAndroidSave() {
+    setBlockedApps(
+      ANDROID_APPS.filter((a) => selected.has(a.id)).map((a) => a.packageName)
+    );
     syncRoutineToSupabase().catch(() => {});
     Toast.show({ type: "success", text1: t("profile.appsSaved") });
     router.back();
   }
-
-  const canSave =
-    Platform.OS === "ios" ? iosApps.length > 0 : selected.size > 0;
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -121,7 +139,7 @@ export default function BlockedAppsScreen() {
             <View className="flex-row items-center gap-3">
               <Ionicons name="apps-outline" size={22} color="#705E46" />
               <Text className="font-sans-medium text-base text-text-dark dark:text-text-light">
-                {iosApps.length > 0
+                {selectionCount > 0
                   ? t("onboarding.step5.changeApps")
                   : t("onboarding.step5.chooseApps")}
               </Text>
@@ -133,22 +151,12 @@ export default function BlockedAppsScreen() {
             )}
           </TouchableOpacity>
 
-          {iosApps.length > 0 && (
-            <View className="mt-6">
-              <Text className="font-sans-medium text-xs tracking-widest text-greige uppercase mb-3">
-                {t("onboarding.step5.selectedApps")}
+          {selectionCount > 0 && (
+            <View className="mt-4 flex-row items-center gap-2 px-1">
+              <Ionicons name="checkmark-circle" size={16} color="#705E46" />
+              <Text className="font-sans-body text-sm text-brown-mid dark:text-greige">
+                {selectionCount} {selectionCount === 1 ? "app" : "apps"} selected
               </Text>
-              {iosApps.map((app) => (
-                <View
-                  key={app.bundleId}
-                  className="flex-row items-center py-3 border-b border-surface-light dark:border-surface-dark"
-                >
-                  <Ionicons name="checkmark-circle" size={18} color="#705E46" />
-                  <Text className="ml-3 font-sans-body text-sm text-text-dark dark:text-text-light">
-                    {app.name ?? app.bundleId}
-                  </Text>
-                </View>
-              ))}
             </View>
           )}
         </View>
@@ -194,22 +202,32 @@ export default function BlockedAppsScreen() {
         />
       )}
 
-      {/* Save */}
+      {/* Bottom action */}
       <View
         className="px-6 pt-4 border-t border-surface-light dark:border-surface-dark"
         style={{ paddingBottom: Math.max(insets.bottom, 24) }}
       >
-        {!canSave && (
-          <Text className="font-sans-body text-xs text-greige text-center mb-3">
-            {t("onboarding.step5.selectHint")}
-          </Text>
+        {Platform.OS === "ios" ? (
+          <PillButton
+            label={t("common.back")}
+            variant="outline"
+            onPress={() => router.back()}
+          />
+        ) : (
+          <>
+            {selected.size === 0 && (
+              <Text className="font-sans-body text-xs text-greige text-center mb-3">
+                {t("onboarding.step5.selectHint")}
+              </Text>
+            )}
+            <PillButton
+              label={t("common.save")}
+              variant="primary"
+              disabled={selected.size === 0}
+              onPress={handleAndroidSave}
+            />
+          </>
         )}
-        <PillButton
-          label={t("common.save")}
-          variant="primary"
-          disabled={!canSave}
-          onPress={handleSave}
-        />
       </View>
     </SafeAreaView>
   );

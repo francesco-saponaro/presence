@@ -1,12 +1,14 @@
 import Foundation
 import FamilyControls
 import ManagedSettings
+import DeviceActivity
 import React // Required for RCTPromiseResolveBlock / RCTPromiseRejectBlock
 
 @objc(PresenceScreenTime)
 public class PresenceScreenTime: NSObject {
 
     private let store = ManagedSettingsStore()
+    private let appGroup = "group.com.franciccio.presence"
 
     // ── Authorization ─────────────────────────────────────────────────────────
 
@@ -107,6 +109,8 @@ public class PresenceScreenTime: NSObject {
      Applies a shield from a base64-encoded FamilyActivitySelection produced by
      PresencePicker.show(). Uses real ApplicationTokens so only the user-selected
      apps are blocked — no fallback to .all() needed here.
+     Also writes the selection to the shared App Group so the DeviceActivityMonitor
+     extension can read it when the main app is closed.
      */
     @objc
     public func applyShieldFromSelection(_ base64: String,
@@ -121,6 +125,12 @@ public class PresenceScreenTime: NSObject {
               let selection = try? JSONDecoder().decode(FamilyActivitySelection.self, from: data) else {
             reject("DECODE_ERROR", "Failed to decode FamilyActivitySelection", nil as Error?)
             return
+        }
+
+        // Persist to App Group so the DeviceActivityMonitor extension can read it
+        if let defaults = UserDefaults(suiteName: appGroup) {
+            defaults.set(base64, forKey: "familyActivitySelection")
+            defaults.synchronize()
         }
 
         let tokens = selection.applicationTokens
@@ -151,6 +161,95 @@ public class PresenceScreenTime: NSObject {
         store.shield.applications = nil
         store.shield.applicationCategories = nil
         store.shield.webDomainCategories = nil
+        resolve(nil)
+    }
+
+    // ── DeviceActivity scheduling ─────────────────────────────────────────────
+
+    /**
+     Schedules the DeviceActivityMonitor extension to apply the shield at the
+     user's configured block time, even when Presence is not running.
+
+     - selectionBase64: base64-encoded FamilyActivitySelection (may be empty for legacy users)
+     - localHour: block time in the device's LOCAL timezone (0–23)
+     - localMinute: minutes component (0–59)
+     - frequency: "daily" | "5x" | "weekends"
+
+     The OS fires intervalDidStart in PresenceMonitor.swift at the scheduled time.
+     The schedule repeats daily; the extension filters by day-of-week using
+     the `frequency` value stored in the shared UserDefaults.
+
+     The block window is 23 hours (blockTime → blockTime+23h), giving the user
+     the full next-day morning to verify. The main app calls clearShield() on
+     successful verification, which takes effect immediately regardless of the
+     DeviceActivity schedule still running.
+     */
+    @objc
+    public func scheduleMonitoring(_ selectionBase64: String,
+                                    localHour: Double,
+                                    localMinute: Double,
+                                    frequency: String,
+                                    resolve: @escaping RCTPromiseResolveBlock,
+                                    reject: @escaping RCTPromiseRejectBlock) {
+        guard #available(iOS 16.0, *) else {
+            // DeviceActivity requires iOS 16 — silently succeed on older OS
+            resolve(nil)
+            return
+        }
+
+        // Write shared data for the extension to read
+        if let defaults = UserDefaults(suiteName: appGroup) {
+            if !selectionBase64.isEmpty {
+                defaults.set(selectionBase64, forKey: "familyActivitySelection")
+            }
+            defaults.set(frequency, forKey: "blockFrequency")
+            defaults.synchronize()
+        }
+
+        let hour = Int(localHour)
+        let minute = Int(localMinute)
+        let endHour = (hour + 23) % 24  // 23-hour block window
+
+        var startComponents = DateComponents()
+        startComponents.hour = hour
+        startComponents.minute = minute
+
+        var endComponents = DateComponents()
+        endComponents.hour = endHour
+        endComponents.minute = minute
+
+        let schedule = DeviceActivitySchedule(
+            intervalStart: startComponents,
+            intervalEnd: endComponents,
+            repeats: true
+        )
+
+        let center = DeviceActivityCenter()
+        do {
+            // stopMonitoring first so re-configuring the schedule works cleanly
+            center.stopMonitoring([DeviceActivityName("presence.blockTime")])
+            try center.startMonitoring(DeviceActivityName("presence.blockTime"), during: schedule)
+            NSLog("[PresenceScreenTime] scheduleMonitoring: block at %02d:%02d, window=23h, freq=%@",
+                  hour, minute, frequency)
+            resolve(nil)
+        } catch {
+            NSLog("[PresenceScreenTime] scheduleMonitoring failed: %@", error.localizedDescription)
+            reject("SCHEDULE_ERROR", error.localizedDescription, error)
+        }
+    }
+
+    /**
+     Stops all DeviceActivity monitoring (called when the user disables their routine).
+     */
+    @objc
+    public func stopMonitoring(_ resolve: @escaping RCTPromiseResolveBlock,
+                                reject: @escaping RCTPromiseRejectBlock) {
+        guard #available(iOS 16.0, *) else {
+            resolve(nil)
+            return
+        }
+        DeviceActivityCenter().stopMonitoring()
+        NSLog("[PresenceScreenTime] stopMonitoring: all activities stopped")
         resolve(nil)
     }
 }

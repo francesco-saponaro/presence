@@ -76,6 +76,13 @@ public class PresencePicker: NSObject {
                 return
             }
 
+            // Traverse to the topmost presented VC — presenting on a VC that already
+            // has a presentedViewController silently fails in UIKit.
+            var topVC = rootVC
+            while let presented = topVC.presentedViewController {
+                topVC = presented
+            }
+
             viewModel.onCancel = { [weak hostingController] in
                 hostingController?.dismiss(animated: true) {
                     resolve(nil)
@@ -104,7 +111,7 @@ public class PresencePicker: NSObject {
                 }
             }
 
-            rootVC.present(hostingController, animated: true)
+            topVC.present(hostingController, animated: true)
         }
     }
 }
