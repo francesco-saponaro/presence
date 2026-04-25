@@ -333,10 +333,17 @@ function withExtensionScheme(config) {
 
       // Remove any BuildActionEntry whose BuildableReference names our extension.
       // The entry spans multiple lines so we use the 's' (dotAll) flag.
+      //
+      // CRITICAL: Xcode scheme XML uses spaces around '=' in attributes, e.g.:
+      //   BlueprintName = "PresenceMonitor"
+      // A naive includes('BlueprintName="PresenceMonitor"') would never match.
+      // Use a regex test that tolerates optional whitespace around '='.
+      const extensionNamePattern = new RegExp(
+        `BlueprintName\\s*=\\s*"${EXTENSION_NAME}"`
+      );
       scheme = scheme.replace(
         /<BuildActionEntry[^>]*>[\s\S]*?<\/BuildActionEntry>/g,
-        (match) =>
-          match.includes(`BlueprintName="${EXTENSION_NAME}"`) ? "" : match
+        (match) => (extensionNamePattern.test(match) ? "" : match)
       );
 
       if (scheme !== before) {
