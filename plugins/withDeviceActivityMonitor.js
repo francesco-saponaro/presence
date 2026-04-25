@@ -99,7 +99,6 @@ function withExtensionTarget(config) {
       extBundleId,
     );
 
-    // CRITICAL FIX: Bypass the buggy PBXGroup creation and add the file directly to the root project group
     const mainGroupKey = xcodeProject.getFirstProject().firstProject.mainGroup;
     xcodeProject.addSourceFile(
       `${EXTENSION_NAME}/PresenceMonitor.swift`,
@@ -107,7 +106,6 @@ function withExtensionTarget(config) {
       mainGroupKey,
     );
 
-    // Extract the Development Team ID from the main app
     let teamId = "";
     const mainTarget = xcodeProject.getFirstTarget();
     const mainConfigListUUID = mainTarget.firstTarget.buildConfigurationList;
@@ -158,60 +156,15 @@ function withExtensionTarget(config) {
       });
     }
 
-    const objects = xcodeProject.hash.project.objects;
-    let extProductRef = null;
-    Object.entries(objects["PBXNativeTarget"] || {}).forEach(([, t]) => {
-      if (
-        t &&
-        typeof t === "object" &&
-        (t.name === EXTENSION_NAME || t.name === `"${EXTENSION_NAME}"`)
-      ) {
-        extProductRef = t.productReference;
-      }
-    });
-
-    if (extProductRef) {
-      const buildFileUUID = xcodeProject.generateUuid();
-      if (!objects["PBXBuildFile"]) objects["PBXBuildFile"] = {};
-      objects["PBXBuildFile"][buildFileUUID] = {
-        isa: "PBXBuildFile",
-        fileRef: extProductRef,
-        fileRef_comment: `${EXTENSION_NAME}.appex`,
-        settings: { ATTRIBUTES: ["RemoveHeadersOnCopy"] },
-      };
-      objects["PBXBuildFile"][`${buildFileUUID}_comment`] =
-        `${EXTENSION_NAME}.appex in Embed Presence Extensions`;
-
-      const embedPhaseUUID = xcodeProject.generateUuid();
-      if (!objects["PBXCopyFilesBuildPhase"])
-        objects["PBXCopyFilesBuildPhase"] = {};
-      objects["PBXCopyFilesBuildPhase"][embedPhaseUUID] = {
-        isa: "PBXCopyFilesBuildPhase",
-        buildActionMask: 2147483647,
-        dstPath: `""`,
-        dstSubfolderSpec: 13,
-        files: [
-          {
-            value: buildFileUUID,
-            comment: `${EXTENSION_NAME}.appex in Embed Presence Extensions`,
-          },
-        ],
-        name: `"Embed Presence Extensions"`,
-        runOnlyForDeploymentPostprocessing: 0,
-      };
-      objects["PBXCopyFilesBuildPhase"][`${embedPhaseUUID}_comment`] =
-        "Embed Presence Extensions";
-
-      const mainTargetObj = objects["PBXNativeTarget"][mainTarget.uuid];
-      if (mainTargetObj && Array.isArray(mainTargetObj.buildPhases)) {
-        mainTargetObj.buildPhases.push({
-          value: embedPhaseUUID,
-          comment: "Embed Presence Extensions",
-        });
-      }
-
-      xcodeProject.addTargetDependency(mainTarget.uuid, [extTarget.uuid]);
-    }
+    // --- CRITICAL FIX: Safe Embedding Logic ---
+    xcodeProject.addBuildPhase(
+      [],
+      "PBXCopyFilesBuildPhase",
+      "Embed App Extensions",
+      mainTarget.uuid,
+      "app_extension",
+      "",
+    );
 
     return cfg;
   });
