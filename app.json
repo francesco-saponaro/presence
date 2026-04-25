@@ -8,6 +8,7 @@
     "scheme": "presence",
     "userInterfaceStyle": "automatic",
     "ios": {
+      "buildNumber": "20",
       "supportsTablet": false,
       "bundleIdentifier": "com.franciccio.presence",
       "infoPlist": {

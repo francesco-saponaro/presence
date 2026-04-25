@@ -11,16 +11,11 @@
     },
     "preview": {
       "distribution": "internal",
-      "android": {
-        "autoIncrement": true
-      },
-      "ios": {
-        "autoIncrement": true
-      },
+      "android": {},
+      "ios": {},
       "channel": "preview"
     },
     "production": {
-      "autoIncrement": true,
       "channel": "production"
     }
   },
