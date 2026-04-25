@@ -297,11 +297,98 @@ function withExtensionTarget(config) {
   });
 }
 
+// ── Step 5: Remove extension from scheme's direct build targets ──────────────
+//
+// addTarget() adds PresenceMonitor to PBXProject.targets, so Expo's prebuild
+// includes it in the generated scheme as a direct build target.  When Xcode
+// then archives the "Presence" scheme it tries to build PresenceMonitor both
+// (a) directly as a scheme target, and (b) again as a dependency of Presence
+// (via addTargetDependency).  This produces the "Unexpected duplicate tasks"
+// error.  Removing it from the scheme's BuildActionEntries means it only ever
+// builds as a dependency — which is the correct behaviour for an app extension.
+
+function withExtensionScheme(config) {
+  return withDangerousMod(config, [
+    "ios",
+    async (cfg) => {
+      const iosRoot = cfg.modRequest.platformProjectRoot;
+      const projectName = cfg.modRequest.projectName;
+      const schemePath = path.join(
+        iosRoot,
+        `${projectName}.xcodeproj`,
+        "xcshareddata",
+        "xcschemes",
+        `${projectName}.xcscheme`
+      );
+
+      if (!fs.existsSync(schemePath)) {
+        console.log(
+          "[withDeviceActivityMonitor] scheme file not found — skipping"
+        );
+        return cfg;
+      }
+
+      let scheme = fs.readFileSync(schemePath, "utf8");
+      const before = scheme;
+
+      // Remove any BuildActionEntry whose BuildableReference names our extension.
+      // The entry spans multiple lines so we use the 's' (dotAll) flag.
+      scheme = scheme.replace(
+        /<BuildActionEntry[^>]*>[\s\S]*?<\/BuildActionEntry>/g,
+        (match) =>
+          match.includes(`BlueprintName="${EXTENSION_NAME}"`) ? "" : match
+      );
+
+      if (scheme !== before) {
+        fs.writeFileSync(schemePath, scheme, "utf8");
+        console.log(
+          `✅ Removed ${EXTENSION_NAME} from scheme BuildActionEntries`
+        );
+      }
+
+      return cfg;
+    },
+  ]);
+}
+
+// ── Step 6: Declare empty Podfile target ─────────────────────────────────────
+//
+// Without this, CocoaPods sees an "unconfigured" native target in the project
+// and may apply post-install scripts (including Hermes-related script phases)
+// to it.  An explicit empty target block tells CocoaPods "this target has no
+// pods" and prevents any automatic integration.
+
+function withExtensionPodfile(config) {
+  return withDangerousMod(config, [
+    "ios",
+    async (cfg) => {
+      const iosRoot = cfg.modRequest.platformProjectRoot;
+      const podfilePath = path.join(iosRoot, "Podfile");
+
+      if (!fs.existsSync(podfilePath)) return cfg;
+
+      let contents = fs.readFileSync(podfilePath, "utf8");
+
+      if (contents.includes(`target '${EXTENSION_NAME}'`)) return cfg;
+
+      contents =
+        contents.trimEnd() +
+        `\n\n# ${EXTENSION_NAME} — DeviceActivityMonitor extension, no pods needed\ntarget '${EXTENSION_NAME}' do\nend\n`;
+
+      fs.writeFileSync(podfilePath, contents, "utf8");
+      console.log(`✅ Added empty ${EXTENSION_NAME} target to Podfile`);
+      return cfg;
+    },
+  ]);
+}
+
 // ── Export ───────────────────────────────────────────────────────────────────
 
 module.exports = function withDeviceActivityMonitor(config) {
   config = withAppGroupEntitlement(config);
   config = withExtensionFiles(config);
   config = withExtensionTarget(config);
+  config = withExtensionScheme(config);
+  config = withExtensionPodfile(config);
   return config;
 };
