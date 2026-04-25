@@ -1,6 +1,7 @@
 {
   "common": {
     "continue": "Continuar",
+    "save": "Guardar",
     "back": "Volver",
     "loading": "Cargando...",
     "error": "Algo salió mal.",
@@ -114,7 +115,10 @@
       "label": "Paso 7 de 9",
       "title": "¿Qué apps te distraen más?",
       "subtitle": "Selecciona las que Presence bloqueará.",
-      "selectHint": "Selecciona al menos una para continuar."
+      "selectHint": "Selecciona al menos una para continuar.",
+      "chooseApps": "Elegir apps a bloquear",
+      "changeApps": "Cambiar apps seleccionadas",
+      "selectedApps": "Apps seleccionadas"
     },
     "step6": {
       "label": "Paso 8 de 9",
@@ -192,6 +196,9 @@
     "sectionSupport": "Soporte",
     "sectionAccount": "Cuenta",
     "manageRoutine": "Gestionar rutina",
+    "scheduleTitle": "Horario",
+    "scheduleSaved": "Horario guardado.",
+    "appsSaved": "Apps bloqueadas guardadas.",
     "frequency": "Frecuencia",
     "blockedApps": "Apps bloqueadas",
     "trustedContacts": "Contactos de confianza",

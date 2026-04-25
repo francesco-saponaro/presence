@@ -104,6 +104,44 @@ public class PresenceScreenTime: NSObject {
     }
 
     /**
+     Applies a shield from a base64-encoded FamilyActivitySelection produced by
+     PresencePicker.show(). Uses real ApplicationTokens so only the user-selected
+     apps are blocked — no fallback to .all() needed here.
+     */
+    @objc
+    public func applyShieldFromSelection(_ base64: String,
+                                         resolve: @escaping RCTPromiseResolveBlock,
+                                         reject: @escaping RCTPromiseRejectBlock) {
+        guard #available(iOS 16.0, *) else {
+            reject("UNSUPPORTED", "Requires iOS 16 or later", nil as Error?)
+            return
+        }
+
+        guard let data = Data(base64Encoded: base64),
+              let selection = try? JSONDecoder().decode(FamilyActivitySelection.self, from: data) else {
+            reject("DECODE_ERROR", "Failed to decode FamilyActivitySelection", nil as Error?)
+            return
+        }
+
+        let tokens = selection.applicationTokens
+        NSLog("[PresenceScreenTime] applyShieldFromSelection: %d app tokens", tokens.count)
+
+        if tokens.isEmpty {
+            // Picker was shown but no apps were picked — clear any existing shield
+            store.shield.applications = nil
+            store.shield.applicationCategories = nil
+            store.shield.webDomainCategories = nil
+            NSLog("[PresenceScreenTime] selection has no tokens — shield cleared")
+        } else {
+            store.shield.applications = tokens
+            store.shield.applicationCategories = nil
+            store.shield.webDomainCategories = nil
+            NSLog("[PresenceScreenTime] shield applied with %d specific app tokens", tokens.count)
+        }
+        resolve(nil)
+    }
+
+    /**
      Removes all application and category shields from the ManagedSettingsStore.
      Safe to call even when no shield is active.
      */

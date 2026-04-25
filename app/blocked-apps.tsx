@@ -1,47 +1,55 @@
 import { useState } from "react";
-import { View, Text, FlatList, TouchableOpacity, Platform, ActivityIndicator } from "react-native";
+import {
+  View, Text, FlatList, TouchableOpacity,
+  Platform, ActivityIndicator,
+} from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
-import { useOnboardingStore } from "@/store/onboardingStore";
 import { useRoutineStore } from "@/store/routine";
-import { OnboardingProgress } from "@/components/ui/OnboardingProgress";
-import { PillButton } from "@/components/ui/PillButton";
 import { PickerModule, type PickerApp } from "@/lib/nativeModules";
+import { syncRoutineToSupabase } from "@/lib/routineSync";
+import { PillButton } from "@/components/ui/PillButton";
 import Toast from "react-native-toast-message";
 
-// Android-only: hardcoded list of common apps to block
+// Android list — same as onboarding
 const ANDROID_APPS = [
-  { id: "instagram",  name: "Instagram",  color: "#E1306C", packageName: "com.instagram.android" },
-  { id: "tiktok",     name: "TikTok",     color: "#010101", packageName: "com.zhiliaoapp.musically" },
-  { id: "twitter",    name: "X / Twitter",color: "#1DA1F2", packageName: "com.twitter.android" },
-  { id: "youtube",    name: "YouTube",    color: "#FF0000", packageName: "com.google.android.youtube" },
-  { id: "reddit",     name: "Reddit",     color: "#FF4500", packageName: "com.reddit.frontpage" },
-  { id: "snapchat",   name: "Snapchat",   color: "#FFFC00", packageName: "com.snapchat.android" },
-  { id: "facebook",   name: "Facebook",   color: "#1877F2", packageName: "com.facebook.katana" },
-  { id: "threads",    name: "Threads",    color: "#101010", packageName: "com.instagram.barcelona" },
+  { id: "instagram",  name: "Instagram",   color: "#E1306C", packageName: "com.instagram.android" },
+  { id: "tiktok",     name: "TikTok",      color: "#010101", packageName: "com.zhiliaoapp.musically" },
+  { id: "twitter",    name: "X / Twitter", color: "#1DA1F2", packageName: "com.twitter.android" },
+  { id: "youtube",    name: "YouTube",     color: "#FF0000", packageName: "com.google.android.youtube" },
+  { id: "reddit",     name: "Reddit",      color: "#FF4500", packageName: "com.reddit.frontpage" },
+  { id: "snapchat",   name: "Snapchat",    color: "#FFFC00", packageName: "com.snapchat.android" },
+  { id: "facebook",   name: "Facebook",    color: "#1877F2", packageName: "com.facebook.katana" },
+  { id: "threads",    name: "Threads",     color: "#101010", packageName: "com.instagram.barcelona" },
 ];
 
-export default function Step5Apps() {
+export default function BlockedAppsScreen() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const setCurrentStep = useOnboardingStore((s) => s.setCurrentStep);
-  const { setBlockedApps, setFamilyActivitySelection, familyActivitySelection, blockedApps } =
-    useRoutineStore();
 
-  // iOS: track selected apps returned from the picker
-  const [iosApps, setIosApps] = useState<PickerApp[]>(() => {
-    // Re-hydrate display list from stored bundle IDs on re-entry
-    if (Platform.OS === "ios" && blockedApps.length > 0) {
-      return blockedApps.map((bundleId) => ({ bundleId }));
-    }
-    return [];
-  });
+  const {
+    blockedApps,
+    familyActivitySelection,
+    setBlockedApps,
+    setFamilyActivitySelection,
+  } = useRoutineStore();
+
+  // iOS: track selected apps for display
+  const [iosApps, setIosApps] = useState<PickerApp[]>(() =>
+    blockedApps.map((bundleId) => ({ bundleId }))
+  );
   const [pickerLoading, setPickerLoading] = useState(false);
 
-  // Android: checkbox selection state
-  const [selected, setSelected] = useState<Set<string>>(new Set(["instagram", "tiktok"]));
+  // Android: pre-fill from stored package names
+  const [selected, setSelected] = useState<Set<string>>(() => {
+    const stored = new Set<string>();
+    ANDROID_APPS.forEach((a) => {
+      if (blockedApps.includes(a.packageName)) stored.add(a.id);
+    });
+    return stored.size > 0 ? stored : new Set(["instagram", "tiktok"]);
+  });
 
   function toggleApp(id: string) {
     setSelected((prev) => {
@@ -51,13 +59,7 @@ export default function Step5Apps() {
     });
   }
 
-  function handleBack() {
-    setCurrentStep(6);
-    if (router.canGoBack()) router.back();
-    else router.replace("/(onboarding)/step-6-contacts");
-  }
-
-  // ── iOS: open FamilyActivityPicker ────────────────────────────────────────
+  // ── iOS picker ────────────────────────────────────────────────────────────
 
   async function openPicker() {
     setPickerLoading(true);
@@ -66,60 +68,50 @@ export default function Step5Apps() {
       if (result) {
         setIosApps(result.apps);
         setFamilyActivitySelection(result.selection);
-        // Also store bundle IDs in blockedApps for Supabase sync / display
         setBlockedApps(result.apps.map((a) => a.bundleId));
       }
-    } catch (e) {
+    } catch {
       Toast.show({ type: "error", text1: "Could not open app picker" });
     } finally {
       setPickerLoading(false);
     }
   }
 
-  // ── Shared: next ──────────────────────────────────────────────────────────
+  // ── Save ──────────────────────────────────────────────────────────────────
 
-  function handleNext() {
+  async function handleSave() {
     if (Platform.OS === "android") {
       setBlockedApps(
         ANDROID_APPS.filter((a) => selected.has(a.id)).map((a) => a.packageName)
       );
     }
-    setCurrentStep(8);
-    router.push("/(onboarding)/step-6-permissions");
+    // iOS: already saved directly via openPicker → just sync and go back
+    syncRoutineToSupabase().catch(() => {});
+    Toast.show({ type: "success", text1: t("profile.appsSaved") });
+    router.back();
   }
 
-  const canContinue =
+  const canSave =
     Platform.OS === "ios" ? iosApps.length > 0 : selected.size > 0;
 
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <SafeAreaView className="flex-1 bg-milk dark:bg-espresso">
-      <View className="px-6 pt-4 flex-row items-center gap-3">
-        <TouchableOpacity onPress={handleBack} activeOpacity={0.6} hitSlop={8}>
+      {/* Header */}
+      <View className="px-6 pt-4 pb-2 flex-row items-center gap-3">
+        <TouchableOpacity onPress={() => router.back()} activeOpacity={0.6} hitSlop={8}>
           <Ionicons name="chevron-back" size={22} color="#705E46" />
         </TouchableOpacity>
-        <View className="flex-1">
-          <OnboardingProgress current={7} total={9} />
-        </View>
-      </View>
-
-      {/* Header */}
-      <View className="px-6 pt-6 pb-4">
-        <Text className="font-sans-medium text-xs tracking-widest text-greige uppercase mb-2">
-          {t("onboarding.step5.label")}
-        </Text>
-        <Text className="font-serif-display text-3xl text-text-dark dark:text-text-light leading-snug mb-1">
-          {t("onboarding.step5.title")}
-        </Text>
-        <Text className="font-sans-body text-sm text-brown-mid dark:text-greige">
-          {t("onboarding.step5.subtitle")}
+        <Text className="flex-1 font-serif-display text-xl text-text-dark dark:text-text-light">
+          {t("profile.blockedApps")}
         </Text>
       </View>
+      <View className="h-px bg-greige/30 dark:bg-brown-mid/20 mx-6 mb-2" />
 
       {Platform.OS === "ios" ? (
         // ── iOS: FamilyActivityPicker ──────────────────────────────────────
-        <View className="flex-1 px-6">
+        <View className="flex-1 px-6 pt-6">
           <TouchableOpacity
             onPress={openPicker}
             activeOpacity={0.7}
@@ -141,9 +133,8 @@ export default function Step5Apps() {
             )}
           </TouchableOpacity>
 
-          {/* Selected apps list */}
           {iosApps.length > 0 && (
-            <View className="mt-4">
+            <View className="mt-6">
               <Text className="font-sans-medium text-xs tracking-widest text-greige uppercase mb-3">
                 {t("onboarding.step5.selectedApps")}
               </Text>
@@ -194,9 +185,7 @@ export default function Step5Apps() {
                   ].join(" ")}
                 >
                   {isSelected && (
-                    <Text className="text-text-light dark:text-espresso text-xs font-sans-bold">
-                      ✓
-                    </Text>
+                    <Text className="text-text-light dark:text-espresso text-xs font-sans-bold">✓</Text>
                   )}
                 </View>
               </TouchableOpacity>
@@ -205,21 +194,21 @@ export default function Step5Apps() {
         />
       )}
 
-      {/* CTA */}
+      {/* Save */}
       <View
         className="px-6 pt-4 border-t border-surface-light dark:border-surface-dark"
         style={{ paddingBottom: Math.max(insets.bottom, 24) }}
       >
-        {!canContinue && (
+        {!canSave && (
           <Text className="font-sans-body text-xs text-greige text-center mb-3">
             {t("onboarding.step5.selectHint")}
           </Text>
         )}
         <PillButton
-          label={t("common.continue")}
+          label={t("common.save")}
           variant="primary"
-          disabled={!canContinue}
-          onPress={handleNext}
+          disabled={!canSave}
+          onPress={handleSave}
         />
       </View>
     </SafeAreaView>

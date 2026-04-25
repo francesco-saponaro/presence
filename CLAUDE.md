@@ -40,7 +40,11 @@
 1. **Localization is Mandatory:** DO NOT hardcode any English text directly into React components. Every user-facing string must be wrapped in the `t()` function from `react-i18next`. All 5 locale files (en, es, fr, it, pt) in `i18n/locales/` must be updated simultaneously.
 2. **Local Assets & Expo Image:** DO NOT use external URLs, Unsplash links, or standard RN `<Image>`. You MUST use `expo-image` and load the specific provided local files (e.g., `source={require('../assets/images/onboarding-1.png')}`). Ensure `contentFit="contain"` is used so backgrounds blend perfectly into the `#FAF7F2` or `#261B10` app backgrounds.
 3. **No Confetti/Cheap UI:** Use heavy `@gorhom/bottom-sheet`, smooth premium transitions (`react-native-reanimated`), and glassmorphism (`expo-glass-effect`).
-4. **Native Swift Bridges:** The native-src Architecture (CRITICAL): DO NOT write any files directly into the ios/ or android/ directories. Because this is an Expo project developed on Windows, those folders are ephemeral, wiped frequently, and ignored by Git. ALL custom native code (.swift, .m, .kt, .java) MUST be placed in a root directory named native-src/. You must then write an Expo Config Plugin (e.g., plugins/withSwiftFiles.js) to manually copy these files into the native directories during the EAS prebuild phase.
+4. **Native Swift Bridges — Two-Plugin Architecture (CRITICAL):** ALL custom Swift/ObjC code lives in `native-src/`. Two plugins work together during EAS prebuild:
+   - **`plugins/withSwiftFiles.js`** — copies `native-src/*.swift` and `native-src/*.m` to the `ios/` root directory (i.e. `ios/PresenceScreenTime.swift` etc.). This is the location the Xcode project file actually references for compilation.
+   - **`plugins/withScreenTime.js`** — adds the files to the Xcode build target's Sources phase via `addSourceFile()`. Without this the files exist in `ios/` but are not compiled.
+   - **CRITICAL:** The `modules/ios/` directory also contains Swift files but they are NOT compiled by Xcode — those are dead copies from an earlier architecture. Only edit `native-src/` files. Never edit `modules/ios/` Swift files expecting them to take effect.
+   - To add a new native Swift file: (1) create it in `native-src/`, (2) add its filename to the `filesToCopy` array in both `withSwiftFiles.js` and `NATIVE_FILES` in `withScreenTime.js`, (3) create its `.m` ObjC bridge in `native-src/`, (4) expose it in `lib/nativeModules.ts`.
 5. **Native Module Bridging & Imports:** The project uses modern Expo where the New Architecture (newArchEnabled) is true by default. We are utilizing the interop layer for our custom native modules using the RCT_EXTERN_MODULE / RCT_EXTERN_METHOD ObjC bridge pattern. CRITICAL: Because of this, if a Swift file utilizes RCTPromiseResolveBlock or RCTPromiseRejectBlock, it MUST explicitly contain import React at the top of the Swift file, otherwise the EAS cloud compiler will fail.
 6. **Zod v4 API:** This project uses Zod v4. The `errorMap` option is renamed to `error`. Use `z.literal(true, { error: "..." })` not `{ errorMap: ... }`.
 7. **OAuth & Direct Sign-Up (Supabase):** Email confirmation must be **disabled** in the Supabase dashboard (`Auth > Providers > Email > Confirm email: OFF`) for direct sign-up to work. Apple uses `expo-apple-authentication` → `signInWithIdToken`. Google uses `signInWithOAuth` + `expo-web-browser` + `exchangeCodeForSession` (see Section 6A for full detail). The Apple button must only render on `Platform.OS === 'ios'`. Add `presence://` and `presence://auth/callback` to Supabase `Auth > URL Configuration > Redirect URLs`.
@@ -124,7 +128,7 @@ All post-auth navigation is centralised in two places — never scatter `router.
    - **Profile management:** The Profile screen has a "Trusted Contacts" row in the Routine section. Tapping it opens a `BottomSheetModal` where contacts can be added or removed. Every change is immediately persisted to Zustand AND synced to Supabase via `lib/routineSync.ts → syncContactsToSupabase()`.
    - **Supabase:** `routines.trusted_contacts text[] not null default '{}'`. Run the migration comment in `supabase/schema.sql` on existing databases.
 
-7. **App Selection** (`step-5-apps`) — List of social apps with checkboxes. Select the ones Presence will shield. Requires at least 1 selection. Same as before.
+7. **App Selection** (`step-5-apps`) — **iOS:** Shows a "Choose Apps to Block" button that opens Apple's native `FamilyActivityPicker` (via the `PresencePicker` native module). The picker returns a base64-encoded `FamilyActivitySelection` and a list of `{ bundleId, name }` objects. The selection is stored in `routineStore.familyActivitySelection` (base64) and `routineStore.blockedApps` (bundle IDs for display/Android). **Android:** Shows a hardcoded list of social apps with checkboxes — package names stored in `blockedApps`. Requires at least 1 selection to proceed.
 
 8. **Permissions** (`step-6-permissions`) — Four toggle rows: 1) Screen Time / Usage Access, 2) Notifications, 3) Activity Tracking, 4) Photo Library.
    - **Required vs optional:** Screen Time and Photo Library are **required** — the Continue button is blocked and a toast fires if either is missing. Notifications is **recommended** (soft warning toast on continue, but navigation proceeds). Activity Tracking is fully optional.
@@ -141,13 +145,23 @@ All post-auth navigation is centralised in two places — never scatter `router.
 
 - **Tab 1 (Home):** Status indicator (Blocked/Unblocked). Countdown budget. Big "Upload Connection Proof" button when blocked.
 - **Tab 2 (Analytics):** Genuine Connections Made, Current Streak, Time Reclaimed. Warm empty state illustration if stats are 0.
-- **Tab 3 (Profile):** Manage routine, blocked apps, Language picker, Feedback/Contact button, Terms/Privacy links, Log Out/Delete Account. **Trusted Contacts** row lives in the Routine section — tapping it opens a `BottomSheetModal` (`snapPoints: ["70%"]`) where contacts can be added (text input) or removed (×). Every change is immediately written to Zustand and synced to Supabase via `syncContactsToSupabase()`.
+- **Tab 3 (Profile):** Routine section has three rows: **Schedule** (block time + frequency combined, navigates to `app/block-time.tsx`), **Blocked Apps** (navigates to `app/blocked-apps.tsx`), **Trusted Contacts** (opens `BottomSheetModal`). Language picker, Feedback/Contact button, Terms/Privacy links, Log Out/Delete Account.
+  - **Schedule row** shows the current time and frequency as a combined value (e.g. "8:00 PM · Daily"). Navigating to `app/block-time.tsx` gives a full-screen settings page (no onboarding UI) with the same time card + frequency pills; tapping Save updates the store and syncs to Supabase.
+  - **Blocked Apps row** navigates to `app/blocked-apps.tsx` — same iOS picker / Android checkbox flow as onboarding but as a standalone settings page. Save updates the store and syncs to Supabase.
+  - **CRITICAL:** Profile never navigates into `(onboarding)` routes for post-onboarding users. Always use the dedicated settings pages.
+  - **Trusted Contacts** opens a `BottomSheetModal` (`snapPoints: ["70%"]`) where contacts can be added (text input) or removed (×). Every change is immediately written to Zustand and synced to Supabase via `syncContactsToSupabase()`.
 - **Footer:** Must include Copyright info, Logo, and "Manage Subscription" (RevenueCat customer portal).
 
 ### D. The Core Engine (Native OCR & Shield)
 
-- **The Blocker (Cross-Platform):** - **iOS:** Use `AuthorizationCenter.shared` and `ManagedSettingsStore` to apply native Shields.
-  - **Android:** Implement a foreground service using `UsageStatsManager` to detect blocked apps, and use `WindowManager` (`SYSTEM_ALERT_WINDOW`) to draw a custom React Native "Shield" screen over the blocked app.
+- **The Blocker (Cross-Platform):**
+  - **iOS:** Uses `AuthorizationCenter.shared` (FamilyControls) and `ManagedSettingsStore` to apply native Shields. **CRITICAL — App selection flow:**
+    1. During onboarding (step 7) and from the profile "Blocked Apps" page, the user selects apps via Apple's `FamilyActivityPicker` UI (presented by the `PresencePicker` native module). This is the ONLY way to obtain valid `ApplicationToken`s — creating `Application(bundleIdentifier:)` directly always returns `token = nil`.
+    2. The picker returns a base64-encoded `FamilyActivitySelection`. Stored in `routineStore.familyActivitySelection`.
+    3. When shielding, `shieldEngine.ts` calls `ScreenTimeModule.applyShieldFromSelection(base64)` which decodes the selection and sets `store.shield.applications = selection.applicationTokens` — targeting only the user-chosen apps.
+    4. If no `familyActivitySelection` is stored (legacy users / first install), the engine falls back to `applyShield(bundleIds)` which internally falls back to `store.shield.applicationCategories = .all()` when tokens are nil.
+    5. `ManagedSettingsStore` operations are silently no-ops if FamilyControls authorization is not `.approved`. Always check `getAuthorizationStatus()` before applying a shield and re-request if needed.
+  - **Android:** Implements a foreground service using `UsageStatsManager` to detect blocked apps, and uses `WindowManager` (`SYSTEM_ALERT_WINDOW`) to draw a custom React Native "Shield" screen over the blocked app.
 - **The Proof:** `expo-image-picker` passes the screenshot to the native modules.
   - **iOS:** Uses Apple `VNRecognizeTextRequest`.
   - **Android:** Uses Google `ML Kit Vision` API.

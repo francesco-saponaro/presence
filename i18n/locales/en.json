@@ -1,6 +1,7 @@
 {
   "common": {
     "continue": "Continue",
+    "save": "Save",
     "back": "Back",
     "loading": "Loading...",
     "error": "Something went wrong.",
@@ -114,7 +115,10 @@
       "label": "Step 7 of 9",
       "title": "Which apps distract you most?",
       "subtitle": "Select the ones Presence will shield.",
-      "selectHint": "Select at least one to continue."
+      "selectHint": "Select at least one to continue.",
+      "chooseApps": "Choose Apps to Block",
+      "changeApps": "Change Selected Apps",
+      "selectedApps": "Selected Apps"
     },
     "step6": {
       "label": "Step 8 of 9",
@@ -192,6 +196,9 @@
     "sectionSupport": "Support",
     "sectionAccount": "Account",
     "manageRoutine": "Block Time",
+    "scheduleTitle": "Schedule",
+    "scheduleSaved": "Schedule saved.",
+    "appsSaved": "Blocked apps saved.",
     "frequency": "Frequency",
     "blockedApps": "Blocked Apps",
     "trustedContacts": "Trusted Contacts",

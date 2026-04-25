@@ -14,8 +14,10 @@ import { NativeModules, Platform, DeviceEventEmitter } from "react-native";
 interface ScreenTimeModuleType {
   requestAuthorization(): Promise<void>;
   getAuthorizationStatus(): Promise<"approved" | "denied" | "notDetermined" | "unknown">;
-  /** Shield ALL app categories until clearShield() is called. */
+  /** Shield specific apps by bundle ID (falls back to .all() if tokens are nil). */
   applyShield(bundleIds: string[]): Promise<{ tokensApplied: number; appsFound: number } | null>;
+  /** Shield only the apps from a FamilyActivitySelection (base64-encoded). */
+  applyShieldFromSelection(base64: string): Promise<void>;
   clearShield(): Promise<void>;
 }
 
@@ -26,6 +28,7 @@ function buildScreenTimeStub(): ScreenTimeModuleType {
     requestAuthorization: w,
     getAuthorizationStatus: w,
     applyShield: w,
+    applyShieldFromSelection: w,
     clearShield: w,
   };
 }
@@ -86,6 +89,39 @@ export const OCRModule: OCRModuleType = {
     return _nativeOCR.recognizeText(imagePath);
   },
 };
+
+// ── iOS FamilyActivityPicker ─────────────────────────────────────────────────
+
+export interface PickerApp {
+  bundleId: string;
+  name?: string;
+}
+
+export interface PickerResult {
+  /** Base64-encoded FamilyActivitySelection — pass to ScreenTimeModule.applyShieldFromSelection */
+  selection: string;
+  /** Apps the user selected, with bundle IDs and display names */
+  apps: PickerApp[];
+}
+
+interface PickerModuleType {
+  /** Present the native FamilyActivityPicker sheet.
+   *  initialBase64 — previously stored selection to pre-populate (pass null on first launch).
+   *  Resolves with null if the user cancelled, or PickerResult on confirm. */
+  show(initialBase64: string | null): Promise<PickerResult | null>;
+}
+
+function buildPickerStub(): PickerModuleType {
+  return {
+    show: () =>
+      Promise.reject(new Error("PresencePicker is only available on iOS.")),
+  };
+}
+
+export const PickerModule: PickerModuleType =
+  Platform.OS === "ios" && NativeModules.PresencePicker
+    ? NativeModules.PresencePicker
+    : buildPickerStub();
 
 // ── Android shield-activation event ─────────────────────────────────────────
 // BlockerService sends a broadcast → BlockerModule re-emits as a JS event.

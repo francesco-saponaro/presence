@@ -15,6 +15,8 @@ const withCustomSwiftFiles = (config) => {
         "PresenceOCR.swift",
         "PresenceScreenTime.m",
         "PresenceOCR.m",
+        "PresencePicker.swift",
+        "PresencePicker.m",
       ];
 
       filesToCopy.forEach((file) => {

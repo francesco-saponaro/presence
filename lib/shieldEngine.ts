@@ -17,7 +17,7 @@ import { useShieldStore } from "@/store/shield";
 import { useRoutineStore } from "@/store/routine";
 import { useUserStore } from "@/store/userStore";
 import { isBlockTimeActive } from "./timezone";
-import { ScreenTimeModule, BlockerModule, addShieldActivatedListener } from "./nativeModules";
+import { ScreenTimeModule, BlockerModule, addShieldActivatedListener, PickerModule } from "./nativeModules";
 import { supabase } from "./supabase";
 import { scheduleInactivityNotification } from "./notifications";
 
@@ -26,10 +26,27 @@ import { scheduleInactivityNotification } from "./notifications";
 async function activateNativeShield(blockedApps: string[]): Promise<void> {
   if (Platform.OS === "ios") {
     try {
-      const result = await ScreenTimeModule.applyShield(blockedApps);
-      console.log("[shieldEngine] applyShield result:", JSON.stringify(result));
+      const { familyActivitySelection } = useRoutineStore.getState();
+      if (familyActivitySelection) {
+        // Use real ApplicationTokens from FamilyActivityPicker — specific app blocking
+        console.log("[shieldEngine] using FamilyActivitySelection for shield");
+        await ScreenTimeModule.applyShieldFromSelection(familyActivitySelection);
+        console.log("[shieldEngine] applyShieldFromSelection done");
+      } else {
+        // No picker selection yet — fall back to bundle ID method
+        // (will fall back to .all() categories internally if tokens are nil)
+        const authStatus = await ScreenTimeModule.getAuthorizationStatus();
+        console.log("[shieldEngine] FamilyControls auth status:", authStatus);
+        if (authStatus !== "approved") {
+          await ScreenTimeModule.requestAuthorization().catch((e: unknown) =>
+            console.warn("[shieldEngine] requestAuthorization failed:", JSON.stringify(e))
+          );
+        }
+        const result = await ScreenTimeModule.applyShield(blockedApps);
+        console.log("[shieldEngine] applyShield result:", JSON.stringify(result));
+      }
     } catch (e) {
-      console.warn("[shieldEngine] applyShield FAILED:", JSON.stringify(e));
+      console.warn("[shieldEngine] shield FAILED:", JSON.stringify(e));
     }
   } else if (Platform.OS === "android") {
     await BlockerModule.startBlocker(blockedApps).catch(console.warn);

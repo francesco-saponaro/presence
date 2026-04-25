@@ -27,6 +27,8 @@ const NATIVE_FILES = [
   "PresenceScreenTime.swift",
   "PresenceOCR.m",
   "PresenceOCR.swift",
+  "PresencePicker.m",
+  "PresencePicker.swift",
 ];
 
 /** Step 1 – FamilyControls entitlement */

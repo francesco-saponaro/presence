@@ -140,8 +140,7 @@ export default function ProfileScreen() {
   const language = useUserStore((s) => s.language);
   const setLanguage = useUserStore((s) => s.setLanguage);
 
-  const blockTimeUtc = useRoutineStore((s) => s.blockTimeUtc);
-  const frequency = useRoutineStore((s) => s.frequency);
+  const { blockTimeUtc, frequency } = useRoutineStore();
 
   const trustedContacts = useRoutineStore((s) => s.trustedContacts);
   const setTrustedContacts = useRoutineStore((s) => s.setTrustedContacts);
@@ -156,12 +155,14 @@ export default function ProfileScreen() {
   const currentLangLabel =
     LANGUAGES.find((l) => l.code === language)?.label ?? "English";
 
-  const blockTimeLabel = blockTimeUtc
-    ? formatBlockTime(blockTimeUtc)
-    : t("profile.notSet");
-  const frequencyLabel = frequency
-    ? t(`onboarding.step4.${frequency === "5x" ? "fiveX" : frequency}`)
-    : t("profile.notSet");
+  const scheduleLabel = (() => {
+    if (!blockTimeUtc && !frequency) return t("profile.notSet");
+    const time = blockTimeUtc ? formatBlockTime(blockTimeUtc) : "";
+    const freq = frequency
+      ? t(`onboarding.step4.${frequency === "5x" ? "fiveX" : frequency}`)
+      : "";
+    return [time, freq].filter(Boolean).join(" · ");
+  })();
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -297,23 +298,15 @@ export default function ProfileScreen() {
         <Card>
           <Row
             icon="time-outline"
-            label={t("profile.manageRoutine")}
-            value={blockTimeLabel}
-            onPress={() => router.push("/(onboarding)/step-4-goal")}
+            label={t("profile.scheduleTitle")}
+            value={scheduleLabel}
+            onPress={() => router.push("/block-time")}
           />
-          <Divider />
-          <Row
-            icon="calendar-outline"
-            label={t("profile.frequency")}
-            value={frequencyLabel}
-            onPress={() => router.push("/(onboarding)/step-4-goal")}
-          />
-          <Divider />
           <Divider />
           <Row
             icon="apps-outline"
             label={t("profile.blockedApps")}
-            onPress={() => router.push("/(onboarding)/step-5-apps")}
+            onPress={() => router.push("/blocked-apps")}
           />
           <Divider />
           <Row

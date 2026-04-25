@@ -186,6 +186,8 @@ export default function RootLayout() {
             <Stack.Screen name="(onboarding)" />
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="reset-password" />
+            <Stack.Screen name="block-time" />
+            <Stack.Screen name="blocked-apps" />
           </Stack>
           <StatusBar style="auto" />
           <Toast config={toastConfig} />
