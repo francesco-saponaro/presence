@@ -375,13 +375,24 @@ function withExtensionPodfile(config) {
 
       if (contents.includes(`target '${EXTENSION_NAME}'`)) return cfg;
 
-      // The Expo-generated Podfile always ends with the closing `end` of
-      // `target 'Presence' do`.  Insert the extension block just before it.
-      const trimmed = contents.trimEnd();
-      const lastEnd = trimmed.lastIndexOf("\nend");
-      if (lastEnd === -1) {
+      // Find the host target block and insert the extension target just before
+      // its closing `end`.  Using indexOf(hostDecl) then indexOf("\nend", ...)
+      // means we find the FIRST `\nend` after the `target 'Presence' do`
+      // declaration — that is the target's own closing `end`, not post_install's.
+      const projectName = cfg.modRequest.projectName ?? "Presence";
+      const hostDecl = `target '${projectName}' do`;
+      const hostStart = contents.indexOf(hostDecl);
+      if (hostStart === -1) {
         console.warn(
-          "[withDeviceActivityMonitor] Could not locate closing `end` in Podfile — skipping"
+          `[withDeviceActivityMonitor] Could not locate '${hostDecl}' in Podfile — skipping`
+        );
+        return cfg;
+      }
+
+      const closingIdx = contents.indexOf("\nend", hostStart);
+      if (closingIdx === -1) {
+        console.warn(
+          "[withDeviceActivityMonitor] Could not locate closing `end` for host target in Podfile — skipping"
         );
         return cfg;
       }
@@ -393,10 +404,9 @@ function withExtensionPodfile(config) {
         `  end`;
 
       contents =
-        trimmed.slice(0, lastEnd) +
+        contents.slice(0, closingIdx) +
         extensionBlock +
-        trimmed.slice(lastEnd) +
-        "\n";
+        contents.slice(closingIdx);
 
       fs.writeFileSync(podfilePath, contents, "utf8");
       console.log(
