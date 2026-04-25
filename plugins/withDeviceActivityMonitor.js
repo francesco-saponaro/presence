@@ -351,79 +351,16 @@ function withExtensionScheme(config) {
   ]);
 }
 
-// ── Step 6: Declare extension target INSIDE the host target in the Podfile ───
+// NOTE: withExtensionPodfile was removed.
 //
-// CocoaPods requires app extension targets to be nested inside their host
-// target's block.  A top-level `target 'PresenceMonitor' do end` raises:
-//   "Unable to find host target(s) for PresenceMonitor"
-//
-// We insert the extension block just before the final `end` that closes
-// the `target 'Presence' do` block (the last `\nend` in the Podfile).
-// `inherit! :search_paths` is the CocoaPods convention for extensions —
-// it passes header search paths from the host without inheriting pod deps.
-
-function withExtensionPodfile(config) {
-  return withDangerousMod(config, [
-    "ios",
-    async (cfg) => {
-      const iosRoot = cfg.modRequest.platformProjectRoot;
-      const podfilePath = path.join(iosRoot, "Podfile");
-
-      if (!fs.existsSync(podfilePath)) return cfg;
-
-      let contents = fs.readFileSync(podfilePath, "utf8");
-
-      if (contents.includes(`target '${EXTENSION_NAME}'`)) return cfg;
-
-      // Find the host target's OWN closing `end`.
-      //
-      // The Expo-generated Podfile nests post_install (and other blocks) inside
-      // the target, so a simple indexOf("\nend") finds a nested block's `end`
-      // first.  The key insight: the target's closing `end` is at column 0
-      // (starts immediately after a newline with no leading spaces), whereas
-      // every nested block's `end` is indented.  We therefore search for the
-      // regex /\nend(\n|$)/ — an unindented `end` line — starting from just
-      // past the target declaration.
-      const projectName = cfg.modRequest.projectName ?? "Presence";
-      const hostDecl = `target '${projectName}' do`;
-      const hostStart = contents.indexOf(hostDecl);
-      if (hostStart === -1) {
-        console.warn(
-          `[withDeviceActivityMonitor] Could not locate '${hostDecl}' in Podfile — skipping`
-        );
-        return cfg;
-      }
-
-      const unindentedEnd = /\nend(\n|$)/g;
-      unindentedEnd.lastIndex = hostStart + hostDecl.length;
-      const endMatch = unindentedEnd.exec(contents);
-      if (!endMatch) {
-        console.warn(
-          "[withDeviceActivityMonitor] Could not locate unindented closing `end` for host target in Podfile — skipping"
-        );
-        return cfg;
-      }
-      const closingIdx = endMatch.index; // position of the `\n` before `end`
-
-      const extensionBlock =
-        `\n\n  target '${EXTENSION_NAME}' do\n` +
-        `    inherit! :search_paths\n` +
-        `    # No pods needed — DeviceActivityMonitor uses only Apple system frameworks\n` +
-        `  end`;
-
-      contents =
-        contents.slice(0, closingIdx) +
-        extensionBlock +
-        contents.slice(closingIdx);
-
-      fs.writeFileSync(podfilePath, contents, "utf8");
-      console.log(
-        `✅ Added ${EXTENSION_NAME} target inside Presence host target in Podfile`
-      );
-      return cfg;
-    },
-  ]);
-}
+// PresenceMonitor uses ONLY Apple system frameworks (DeviceActivity,
+// FamilyControls, ManagedSettings) — it has zero pod dependencies.
+// CocoaPods only errors about "Unable to find host target(s)" when an
+// extension IS declared in the Podfile but without a proper host target
+// nesting.  If the extension is absent from the Podfile entirely, CocoaPods
+// never processes it and never looks for a host — no error.
+// Xcode still finds and builds the target from the .pbxproj, so nothing
+// breaks at compile time.
 
 // ── Export ───────────────────────────────────────────────────────────────────
 
@@ -432,6 +369,5 @@ module.exports = function withDeviceActivityMonitor(config) {
   config = withExtensionFiles(config);
   config = withExtensionTarget(config);
   config = withExtensionScheme(config);
-  config = withExtensionPodfile(config);
   return config;
 };
