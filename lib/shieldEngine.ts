@@ -25,7 +25,12 @@ import { scheduleInactivityNotification } from "./notifications";
 
 async function activateNativeShield(blockedApps: string[]): Promise<void> {
   if (Platform.OS === "ios") {
-    await ScreenTimeModule.applyShield(blockedApps).catch(console.warn);
+    try {
+      const result = await ScreenTimeModule.applyShield(blockedApps);
+      console.log("[shieldEngine] applyShield result:", JSON.stringify(result));
+    } catch (e) {
+      console.warn("[shieldEngine] applyShield FAILED:", JSON.stringify(e));
+    }
   } else if (Platform.OS === "android") {
     await BlockerModule.startBlocker(blockedApps).catch(console.warn);
   }
@@ -49,15 +54,29 @@ export async function checkAndUpdateShield(): Promise<void> {
   const { blockTimeUtc, frequency, blockedApps } = useRoutineStore.getState();
   const { isBlocked, setBlocked } = useShieldStore.getState();
 
+  console.log("[shieldEngine] checkAndUpdateShield:", { blockTimeUtc, frequency, blockedApps, isBlocked });
+
   // No routine configured yet → nothing to do
-  if (!blockTimeUtc || !frequency || blockedApps.length === 0) return;
+  if (!blockTimeUtc || !frequency || blockedApps.length === 0) {
+    console.log("[shieldEngine] no routine configured, skipping");
+    return;
+  }
 
   const shouldBlock = isBlockTimeActive(blockTimeUtc, frequency);
+  console.log("[shieldEngine] shouldBlock:", shouldBlock);
 
-  if (shouldBlock && !isBlocked) {
-    setBlocked(true);
+  if (shouldBlock) {
+    // Always re-apply the native shield when block time is active.
+    // isBlocked may already be true from persisted Zustand state, but
+    // ManagedSettingsStore (iOS) needs to be re-applied on every app start
+    // because the OS-level shield is not guaranteed to survive process restarts.
+    if (!isBlocked) setBlocked(true);
+    const { NativeModules } = require("react-native");
+    console.log("[shieldEngine] PresenceScreenTime module present:", !!NativeModules.PresenceScreenTime);
+    console.log("[shieldEngine] activating native shield with:", blockedApps);
     await activateNativeShield(blockedApps);
-  } else if (!shouldBlock && isBlocked) {
+    console.log("[shieldEngine] native shield activated");
+  } else if (isBlocked) {
     setBlocked(false);
     await deactivateNativeShield();
   }

@@ -8,7 +8,7 @@ import { supabase } from "@/lib/supabase";
 import { resetPasswordSchema, type ResetPasswordForm } from "@/lib/validation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as Linking from "expo-linking";
-import { router, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
@@ -130,8 +130,7 @@ export default function ResetPasswordScreen() {
 
     setInRecovery(false);
     Toast.show({ type: "success", text1: t("auth.passwordUpdated") });
-    await supabase.auth.signOut();
-    router.replace("/(auth)/login");
+    await supabase.auth.signOut(); // SIGNED_OUT in _layout.tsx handles navigation
   }
 
   return (

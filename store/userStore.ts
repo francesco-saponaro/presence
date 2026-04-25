@@ -94,11 +94,12 @@ export const useUserStore = create<UserState>()(
         set({
           userId: null,
           email: null,
-          isSubscribed: false,
-          subscriptionExpiresAt: null,
           lifetimeSuccessfulConnections: 0,
           currentStreak: 0,
           lastConnectionDate: null,
+          // isSubscribed / subscriptionExpiresAt intentionally kept —
+          // same-user sign-out/sign-in must not lose subscription state.
+          // Explicitly reset by _layout.tsx only for new or different accounts.
           // language intentionally kept — it is a device-level preference
         }),
     }),

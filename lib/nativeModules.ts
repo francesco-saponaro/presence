@@ -15,7 +15,7 @@ interface ScreenTimeModuleType {
   requestAuthorization(): Promise<void>;
   getAuthorizationStatus(): Promise<"approved" | "denied" | "notDetermined" | "unknown">;
   /** Shield ALL app categories until clearShield() is called. */
-  applyShield(bundleIds: string[]): Promise<void>;
+  applyShield(bundleIds: string[]): Promise<{ tokensApplied: number; appsFound: number } | null>;
   clearShield(): Promise<void>;
 }
 

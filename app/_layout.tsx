@@ -3,6 +3,7 @@ import i18n from "@/i18n";
 import { routeAfterAuth } from "@/lib/authRouting";
 import { initNotifications } from "@/lib/notifications";
 import {
+  checkEntitlement,
   configurePurchases,
   identifyPurchasesUser,
   resetPurchasesUser,
@@ -123,12 +124,23 @@ export default function RootLayout() {
         if (isNewAccount || isDifferentUser) {
           useOnboardingStore.getState().resetOnboarding();
           useUserStore.getState().clearUser();
+          // Explicitly wipe subscription for a fresh account — clearUser() keeps
+          // isSubscribed intact for same-user re-logins.
+          useUserStore.getState().setSubscribed(false, null);
         }
 
         useUserStore.getState().setUser(incomingId, session.user.email ?? "");
 
-        // Tie RevenueCat purchases to this Supabase user ID
-        identifyPurchasesUser(incomingId);
+        // Re-identify with RevenueCat, then restore subscription if RC confirms
+        // it's active. We intentionally do NOT set false here — revocation is
+        // handled by the server-side webhook. The client check is a positive
+        // signal only (restores state after reinstall / account switch).
+        identifyPurchasesUser(incomingId).then(() =>
+          checkEntitlement().then(({ isActive, expiresAt }) => {
+            if (isActive)
+              useUserStore.getState().setSubscribed(true, expiresAt);
+          }),
+        );
       }
 
       // SIGNED_IN covers email, Apple, and Google auth — route to the
@@ -136,6 +148,13 @@ export default function RootLayout() {
       // Skip routing if reset-password.tsx is handling a recovery flow
       // (calling setSession with a recovery token also fires SIGNED_IN).
       if (event === "SIGNED_IN" && !isInRecovery()) {
+        console.log("[_layout] SIGNED_IN routing — store state:", {
+          isOnboardingComplete:
+            useOnboardingStore.getState().isOnboardingComplete,
+          currentStep: useOnboardingStore.getState().currentStep,
+          isSubscribed: useUserStore.getState().isSubscribed,
+          userId: useUserStore.getState().userId,
+        });
         routeAfterAuth();
       }
 

@@ -25,6 +25,8 @@ export function routeAfterAuth() {
   const { isOnboardingComplete, currentStep } = useOnboardingStore.getState();
   const { isSubscribed } = useUserStore.getState();
 
+  console.log("[routeAfterAuth]", { isOnboardingComplete, currentStep, isSubscribed });
+
   if (!isOnboardingComplete) {
     const route = STEP_ROUTES[currentStep] ?? "/(onboarding)/step-1-hook";
     router.replace(route as any);

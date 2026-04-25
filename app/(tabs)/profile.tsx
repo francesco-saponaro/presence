@@ -2,8 +2,6 @@ import i18n from "@/i18n";
 import { syncContactsToSupabase } from "@/lib/routineSync";
 import { supabase } from "@/lib/supabase";
 import { formatBlockTime } from "@/lib/timezone";
-import { useAuthStore } from "@/store/auth";
-import { useOnboardingStore } from "@/store/onboardingStore";
 import { useRoutineStore } from "@/store/routine";
 import { useUserStore } from "@/store/userStore";
 import { Ionicons } from "@expo/vector-icons";
@@ -205,9 +203,6 @@ export default function ProfileScreen() {
         style: "destructive",
         onPress: async () => {
           await supabase.auth.signOut();
-          useAuthStore.getState().setSession(null);
-          useOnboardingStore.getState().resetOnboarding();
-          router.replace("/(auth)/login");
         },
       },
     ]);
@@ -231,10 +226,6 @@ export default function ProfileScreen() {
               return;
             }
             await supabase.auth.signOut();
-            useAuthStore.getState().setSession(null);
-            useOnboardingStore.getState().resetOnboarding();
-            useUserStore.getState().clearUser();
-            router.replace("/(auth)/login");
           },
         },
       ],

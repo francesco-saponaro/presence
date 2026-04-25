@@ -77,20 +77,26 @@ public class PresenceScreenTime: NSObject {
         }
 
         // CRITICAL FIX: The second mapping MUST be compactMap to unwrap the optional tokens
-        let tokens = Set(
-            bundleIds
-                .compactMap { Application(bundleIdentifier: $0) }
-                .compactMap { $0.token } 
-        )
+        let apps = bundleIds.compactMap { Application(bundleIdentifier: $0) }
+        let tokens = Set(apps.compactMap { $0.token })
+
+        NSLog("[PresenceScreenTime] applyShield: input=%d bundleIds, apps=%d, tokens=%d",
+              bundleIds.count, apps.count, tokens.count)
+        for id in bundleIds {
+            let app = Application(bundleIdentifier: id)
+            NSLog("[PresenceScreenTime]   bundleId=%@ token=%@", id, app?.token != nil ? "OK" : "NIL")
+        }
 
         // Setting to nil when empty ensures we never leave a stale empty-set shield.
         if tokens.isEmpty {
+            NSLog("[PresenceScreenTime] tokens empty — shield NOT applied")
             store.shield.applications = nil
+            resolve(["tokensApplied": 0, "appsFound": apps.count])
         } else {
             store.shield.applications = tokens
+            NSLog("[PresenceScreenTime] shield applied with %d tokens", tokens.count)
+            resolve(["tokensApplied": tokens.count, "appsFound": apps.count])
         }
-        
-        resolve(nil)
     }
 
     /**

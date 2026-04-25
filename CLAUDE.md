@@ -82,20 +82,23 @@ All post-auth navigation is centralised in two places — never scatter `router.
 
 2. **`app/_layout.tsx` — `onAuthStateChange` handler:** The single global listener that drives all auth-triggered navigation:
    - `SIGNED_IN` → before routing, checks whether to wipe local state (see "New-user state reset" below), then calls `routeAfterAuth()`. This fires for **all** sign-in methods (email, Apple, Google) so screens do NOT need their own `router.replace` after auth succeeds.
-   - `SIGNED_OUT` → clears user state and routes to `/(auth)/login`.
+   - `SIGNED_OUT` → calls `clearUser()` and routes to `/(auth)/login`. This is the only place that handles post-signout navigation.
    - `PASSWORD_RECOVERY` → early return (handled entirely in `reset-password.tsx`).
    - `INITIAL_SESSION` → no routing here; `index.tsx` handles cold-start routing via its `useEffect`.
    - **New-user state reset (CRITICAL):** On `SIGNED_IN`, the handler compares `session.user.created_at` and `session.user.id` against stored Zustand state to decide whether to wipe local onboarding/user data before routing:
-     1. `isNewAccount` — `created_at` within the last 2 minutes → fresh signup → always call `resetOnboarding()` + `clearUser()`. Handles the "delete account from Supabase backend then re-register" case even when `userId` was already cleared to `null` by a prior `SIGNED_OUT`.
+     1. `isNewAccount` — `created_at` within the last 2 minutes → fresh signup → always call `resetOnboarding()` + `clearUser()` + `setSubscribed(false, null)`. Handles the "delete account from Supabase backend then re-register" case even when `userId` was already cleared to `null` by a prior `SIGNED_OUT`.
      2. `isDifferentUser` — stored `userId` is non-null and differs from the incoming session ID → different existing account on same device → same reset.
      This prevents a returning new user from landing mid-onboarding (or at the paywall) due to stale Zustand persisted state from a previous account.
+   - **RevenueCat re-identification (CRITICAL):** After `setUser()`, the handler calls `identifyPurchasesUser()` then `checkEntitlement()` as a fire-and-forget background sync. If RC confirms an active entitlement it calls `setSubscribed(true, expiresAt)`. It intentionally does NOT set `false` on a negative result — subscription revocation is the server webhook's job. This is a positive-only signal used to restore state after reinstall or account switch.
 
 3. **`app/index.tsx` — cold-start routing brain:** Waits for `authHydrated && onboardingHydrated`, then routes once based on stored state. Only relevant for `INITIAL_SESSION` (session restore on app launch). Does NOT fire for interactive sign-ins.
 
 **Rules:**
 - Login/signup screens must NOT call `router.replace` after social or email auth — `SIGNED_IN` handles it.
-- `signOut` callers (e.g. profile screen) may keep their own `router.replace("/(auth)/login")` for immediacy — the duplicate navigate to the same destination is harmless.
+- `signOut` callers (profile, reset-password, etc.) must NOT call `router.replace` after `supabase.auth.signOut()` — the `SIGNED_OUT` event in `_layout.tsx` handles navigation. Calling it in both places causes a double navigation.
 - Never add a `SIGNED_IN` routing branch to `index.tsx` — that would double-navigate since `index.tsx` is still mounted during the very first sign-in on cold start.
+
+**`clearUser()` subscription state (CRITICAL):** `clearUser()` in `userStore` intentionally does NOT reset `isSubscribed` or `subscriptionExpiresAt`. This preserves subscription state across sign-out/sign-in for the same account. Only the `isNewAccount` / `isDifferentUser` branch in `_layout.tsx` explicitly calls `setSubscribed(false, null)` to wipe it for a fresh account. Never add `isSubscribed` back to `clearUser()` — it causes subscribed users to hit the paywall on every sign-in.
 
 ### B. The Psychological Onboarding Flow (Strict Order)
 
