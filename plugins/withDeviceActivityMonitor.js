@@ -12,10 +12,10 @@
  *   2. Creates ios/PresenceMonitor/ with Info.plist, entitlements, and the
  *      Swift source (copied from native-src/PresenceMonitor.swift).
  *   3. Adds a new "app_extension" Xcode target for PresenceMonitor with the
- *      correct build settings, Swift source file, and system frameworks.
+ *      correct build settings and Swift source file.
+ *      System frameworks (DeviceActivity, FamilyControls, ManagedSettings) are
+ *      Swift auto-linked — no explicit addFramework() needed.
  *   4. Embeds the extension in the main app via a PBXCopyFilesBuildPhase.
- *   5. Adds DeviceActivity.framework to the main app target so
- *      PresenceScreenTime.swift can call DeviceActivityCenter.
  */
 
 const {
@@ -197,37 +197,11 @@ function withExtensionTarget(config) {
       });
     }
 
-    // ── Add system frameworks to extension target ──────────────────────────
-    const systemFrameworks = [
-      "DeviceActivity.framework",
-      "FamilyControls.framework",
-      "ManagedSettings.framework",
-    ];
-
-    systemFrameworks.forEach((fw) => {
-      try {
-        xcodeProject.addFramework(fw, {
-          target: extTarget.uuid,
-          sourceTree: "SDKROOT",
-          customFramework: false,
-        });
-      } catch (e) {
-        console.warn(
-          `[withDeviceActivityMonitor] addFramework ${fw}: ${e.message}`
-        );
-      }
-    });
-
-    // ── Add DeviceActivity.framework to MAIN app target too ───────────────
-    // (needed for DeviceActivityCenter in PresenceScreenTime.swift)
-    try {
-      xcodeProject.addFramework("DeviceActivity.framework", {
-        sourceTree: "SDKROOT",
-        customFramework: false,
-      });
-    } catch (e) {
-      // Likely already added — not a fatal error
-    }
+    // NOTE: DeviceActivity, FamilyControls, ManagedSettings are Apple system
+    // frameworks — Swift auto-links them when imported. Adding them explicitly
+    // via addFramework() caused "Unexpected duplicate tasks" errors because
+    // calling addFramework without a target adds to ALL targets' Frameworks
+    // phases, duplicating entries for the extension target. Omitting is correct.
 
     // ── Embed extension in main app ────────────────────────────────────────
     try {
