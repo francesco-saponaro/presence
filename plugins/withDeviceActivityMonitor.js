@@ -35,7 +35,7 @@ function withExtensionFiles(config) {
       if (fs.existsSync(swiftSrc))
         fs.copyFileSync(swiftSrc, path.join(extDir, "PresenceMonitor.swift"));
 
-      // CRITICAL FIX #1: The full Info.plist that solves the Bundle Identifier crash
+      // The full Info.plist that solves the "ValidateEmbeddedBinary" Bundle ID crash
       fs.writeFileSync(
         path.join(extDir, `${EXTENSION_NAME}-Info.plist`),
         `<?xml version="1.0" encoding="UTF-8"?>
@@ -187,7 +187,7 @@ function withExtensionTarget(config) {
       }
     });
 
-    // CRITICAL FIX #2: The uniquely named embedding phase that stops duplicate tasks
+    // The exact embedding logic from the successful build without the corrupted loop
     if (extProductRef) {
       const buildFileUUID = xcodeProject.generateUuid();
       if (!objects["PBXBuildFile"]) objects["PBXBuildFile"] = {};
@@ -198,56 +198,33 @@ function withExtensionTarget(config) {
         settings: { ATTRIBUTES: ["RemoveHeadersOnCopy"] },
       };
       objects["PBXBuildFile"][`${buildFileUUID}_comment`] =
-        `${EXTENSION_NAME}.appex in Embed PresenceMonitor Extension`;
+        `${EXTENSION_NAME}.appex in Embed Presence Extensions`;
 
-      const embedPhaseName = `"Embed PresenceMonitor Extension"`;
-      let embedPhaseUUID = null;
-      let embedPhase = null;
+      const embedPhaseUUID = xcodeProject.generateUuid();
+      if (!objects["PBXCopyFilesBuildPhase"])
+        objects["PBXCopyFilesBuildPhase"] = {};
+      objects["PBXCopyFilesBuildPhase"][embedPhaseUUID] = {
+        isa: "PBXCopyFilesBuildPhase",
+        buildActionMask: 2147483647,
+        dstPath: `""`,
+        dstSubfolderSpec: 13,
+        files: [
+          {
+            value: buildFileUUID,
+            comment: `${EXTENSION_NAME}.appex in Embed Presence Extensions`,
+          },
+        ],
+        name: `"Embed Presence Extensions"`,
+        runOnlyForDeploymentPostprocessing: 0,
+      };
+      objects["PBXCopyFilesBuildPhase"][`${embedPhaseUUID}_comment`] =
+        "Embed Presence Extensions";
 
-      for (const [uuid, phase] of Object.entries(
-        objects["PBXCopyFilesBuildPhase"] || {},
-      )) {
-        if (
-          phase &&
-          typeof phase === "object" &&
-          phase.name === embedPhaseName
-        ) {
-          embedPhaseUUID = uuid;
-          embedPhase = phase;
-          break;
-        }
-      }
-
-      if (!embedPhase) {
-        embedPhaseUUID = xcodeProject.generateUuid();
-        embedPhase = {
-          isa: "PBXCopyFilesBuildPhase",
-          buildActionMask: 2147483647,
-          dstPath: `""`,
-          dstSubfolderSpec: 13,
-          files: [],
-          name: embedPhaseName,
-          runOnlyForDeploymentPostprocessing: 0,
-        };
-        if (!objects["PBXCopyFilesBuildPhase"])
-          objects["PBXCopyFilesBuildPhase"] = {};
-        objects["PBXCopyFilesBuildPhase"][embedPhaseUUID] = embedPhase;
-        objects["PBXCopyFilesBuildPhase"][`${embedPhaseUUID}_comment`] =
-          embedPhaseName.replace(/"/g, "");
-
-        const mainTargetObj = objects["PBXNativeTarget"][mainTarget.uuid];
-        if (mainTargetObj && Array.isArray(mainTargetObj.buildPhases)) {
-          mainTargetObj.buildPhases.push({
-            value: embedPhaseUUID,
-            comment: embedPhaseName.replace(/"/g, ""),
-          });
-        }
-      }
-
-      if (!embedPhase.files.some((f) => f.value === buildFileUUID)) {
-        embedPhase.files.push({
-          value: buildFileUUID,
-          comment: `${EXTENSION_NAME}.appex in ${embedPhaseName.replace(/"/g, "")}`,
+      const mainTargetObj = objects["PBXNativeTarget"][mainTarget.uuid];
+      if (mainTargetObj && Array.isArray(mainTargetObj.buildPhases)) {
+        mainTargetObj.buildPhases.push({
+          value: embedPhaseUUID,
+          comment: "Embed Presence Extensions",
         });
       }
 
