@@ -375,10 +375,15 @@ function withExtensionPodfile(config) {
 
       if (contents.includes(`target '${EXTENSION_NAME}'`)) return cfg;
 
-      // Find the host target block and insert the extension target just before
-      // its closing `end`.  Using indexOf(hostDecl) then indexOf("\nend", ...)
-      // means we find the FIRST `\nend` after the `target 'Presence' do`
-      // declaration — that is the target's own closing `end`, not post_install's.
+      // Find the host target's OWN closing `end`.
+      //
+      // The Expo-generated Podfile nests post_install (and other blocks) inside
+      // the target, so a simple indexOf("\nend") finds a nested block's `end`
+      // first.  The key insight: the target's closing `end` is at column 0
+      // (starts immediately after a newline with no leading spaces), whereas
+      // every nested block's `end` is indented.  We therefore search for the
+      // regex /\nend(\n|$)/ — an unindented `end` line — starting from just
+      // past the target declaration.
       const projectName = cfg.modRequest.projectName ?? "Presence";
       const hostDecl = `target '${projectName}' do`;
       const hostStart = contents.indexOf(hostDecl);
@@ -389,13 +394,16 @@ function withExtensionPodfile(config) {
         return cfg;
       }
 
-      const closingIdx = contents.indexOf("\nend", hostStart);
-      if (closingIdx === -1) {
+      const unindentedEnd = /\nend(\n|$)/g;
+      unindentedEnd.lastIndex = hostStart + hostDecl.length;
+      const endMatch = unindentedEnd.exec(contents);
+      if (!endMatch) {
         console.warn(
-          "[withDeviceActivityMonitor] Could not locate closing `end` for host target in Podfile — skipping"
+          "[withDeviceActivityMonitor] Could not locate unindented closing `end` for host target in Podfile — skipping"
         );
         return cfg;
       }
+      const closingIdx = endMatch.index; // position of the `\n` before `end`
 
       const extensionBlock =
         `\n\n  target '${EXTENSION_NAME}' do\n` +
