@@ -1,8 +1,3 @@
-/**
- * withDeviceActivityMonitor.js
- * Expo Config Plugin — iOS only
- */
-
 const {
   withXcodeProject,
   withEntitlementsPlist,
@@ -18,9 +13,7 @@ function withAppGroupEntitlement(config) {
   return withEntitlementsPlist(config, (cfg) => {
     const groups =
       cfg.modResults["com.apple.security.application-groups"] ?? [];
-    if (!groups.includes(APP_GROUP)) {
-      groups.push(APP_GROUP);
-    }
+    if (!groups.includes(APP_GROUP)) groups.push(APP_GROUP);
     cfg.modResults["com.apple.security.application-groups"] = groups;
     return cfg;
   });
@@ -31,19 +24,16 @@ function withExtensionFiles(config) {
     "ios",
     async (cfg) => {
       const iosRoot = cfg.modRequest.platformProjectRoot;
-      const projectRoot = cfg.modRequest.projectRoot;
       const extDir = path.join(iosRoot, EXTENSION_NAME);
-
       fs.mkdirSync(extDir, { recursive: true });
 
       const swiftSrc = path.join(
-        projectRoot,
+        cfg.modRequest.projectRoot,
         "native-src",
         "PresenceMonitor.swift",
       );
-      if (fs.existsSync(swiftSrc)) {
+      if (fs.existsSync(swiftSrc))
         fs.copyFileSync(swiftSrc, path.join(extDir, "PresenceMonitor.swift"));
-      }
 
       fs.writeFileSync(
         path.join(extDir, `${EXTENSION_NAME}-Info.plist`),
@@ -77,7 +67,6 @@ function withExtensionFiles(config) {
 </dict>
 </plist>`,
       );
-
       return cfg;
     },
   ]);
@@ -86,20 +75,22 @@ function withExtensionFiles(config) {
 function withExtensionTarget(config) {
   return withXcodeProject(config, (cfg) => {
     const xcodeProject = cfg.modResults;
-    const projectName = cfg.modRequest.projectName;
     const bundleId = cfg.ios?.bundleIdentifier ?? "com.franciccio.presence";
     const extBundleId = `${bundleId}.${EXTENSION_NAME}`;
 
     const existingTargets = Object.values(
       xcodeProject.pbxNativeTargetSection(),
     );
-    const alreadyExists = existingTargets.some(
-      (t) =>
-        t &&
-        typeof t === "object" &&
-        (t.name === EXTENSION_NAME || t.name === `"${EXTENSION_NAME}"`),
-    );
-    if (alreadyExists) return cfg;
+    if (
+      existingTargets.some(
+        (t) =>
+          t &&
+          typeof t === "object" &&
+          (t.name === EXTENSION_NAME || t.name === `"${EXTENSION_NAME}"`),
+      )
+    ) {
+      return cfg;
+    }
 
     const extTarget = xcodeProject.addTarget(
       EXTENSION_NAME,
@@ -108,22 +99,38 @@ function withExtensionTarget(config) {
       extBundleId,
     );
 
-    let groupKey = xcodeProject.findPBXGroupKey({ name: EXTENSION_NAME });
-    if (!groupKey) {
-      groupKey = xcodeProject.generateUuid();
-      xcodeProject.addPbxGroup([], EXTENSION_NAME, '""', groupKey);
-      const rootGroup = xcodeProject.getFirstProject().firstProject.mainGroup;
-      xcodeProject.addToPbxGroup(groupKey, rootGroup);
-    }
-
+    // CRITICAL FIX: Bypass the buggy PBXGroup creation and add the file directly to the root project group
+    const mainGroupKey = xcodeProject.getFirstProject().firstProject.mainGroup;
     xcodeProject.addSourceFile(
       `${EXTENSION_NAME}/PresenceMonitor.swift`,
       { target: extTarget.uuid },
-      groupKey,
+      mainGroupKey,
     );
 
-    const configListUUID = extTarget.pbxNativeTarget.buildConfigurationList;
-    const extConfigList = xcodeProject.pbxXCConfigurationList()[configListUUID];
+    // Extract the Development Team ID from the main app
+    let teamId = "";
+    const mainTarget = xcodeProject.getFirstTarget();
+    const mainConfigListUUID = mainTarget.firstTarget.buildConfigurationList;
+    const mainConfigList =
+      xcodeProject.pbxXCConfigurationList()[mainConfigListUUID];
+    if (mainConfigList) {
+      for (const conf of mainConfigList.buildConfigurations) {
+        const buildCfg =
+          xcodeProject.pbxXCBuildConfigurationSection()[conf.value];
+        if (
+          buildCfg &&
+          buildCfg.buildSettings &&
+          buildCfg.buildSettings.DEVELOPMENT_TEAM
+        ) {
+          teamId = buildCfg.buildSettings.DEVELOPMENT_TEAM;
+          break;
+        }
+      }
+    }
+
+    const extConfigListUUID = extTarget.pbxNativeTarget.buildConfigurationList;
+    const extConfigList =
+      xcodeProject.pbxXCConfigurationList()[extConfigListUUID];
 
     if (extConfigList) {
       extConfigList.buildConfigurations.forEach((c) => {
@@ -145,14 +152,13 @@ function withExtensionTarget(config) {
             CODE_SIGN_STYLE: "Automatic",
             TARGETED_DEVICE_FAMILY: `"1"`,
             SWIFT_EMIT_LOC_STRINGS: "YES",
+            DEVELOPMENT_TEAM: teamId || '""',
           });
         }
       });
     }
 
     const objects = xcodeProject.hash.project.objects;
-    const mainTargetUUID = xcodeProject.getFirstTarget().uuid;
-
     let extProductRef = null;
     Object.entries(objects["PBXNativeTarget"] || {}).forEach(([, t]) => {
       if (
@@ -164,69 +170,48 @@ function withExtensionTarget(config) {
       }
     });
 
-    if (!extProductRef) return cfg;
+    if (extProductRef) {
+      const buildFileUUID = xcodeProject.generateUuid();
+      if (!objects["PBXBuildFile"]) objects["PBXBuildFile"] = {};
+      objects["PBXBuildFile"][buildFileUUID] = {
+        isa: "PBXBuildFile",
+        fileRef: extProductRef,
+        fileRef_comment: `${EXTENSION_NAME}.appex`,
+        settings: { ATTRIBUTES: ["RemoveHeadersOnCopy"] },
+      };
+      objects["PBXBuildFile"][`${buildFileUUID}_comment`] =
+        `${EXTENSION_NAME}.appex in Embed Presence Extensions`;
 
-    const buildFileUUID = xcodeProject.generateUuid();
-    if (!objects["PBXBuildFile"]) objects["PBXBuildFile"] = {};
-    objects["PBXBuildFile"][buildFileUUID] = {
-      isa: "PBXBuildFile",
-      fileRef: extProductRef,
-      fileRef_comment: `${EXTENSION_NAME}.appex`,
-      settings: { ATTRIBUTES: ["RemoveHeadersOnCopy"] },
-    };
-    objects["PBXBuildFile"][`${buildFileUUID}_comment`] =
-      `${EXTENSION_NAME}.appex in Embed Foundation Extensions`;
-
-    let embedPhaseUUID = null;
-    let embedPhase = null;
-    for (const [uuid, phase] of Object.entries(
-      objects["PBXCopyFilesBuildPhase"] || {},
-    )) {
-      if (
-        phase &&
-        typeof phase === "object" &&
-        phase.name === `"Embed Foundation Extensions"`
-      ) {
-        embedPhaseUUID = uuid;
-        embedPhase = phase;
-        break;
-      }
-    }
-
-    if (!embedPhase) {
-      embedPhaseUUID = xcodeProject.generateUuid();
-      embedPhase = {
+      const embedPhaseUUID = xcodeProject.generateUuid();
+      if (!objects["PBXCopyFilesBuildPhase"])
+        objects["PBXCopyFilesBuildPhase"] = {};
+      objects["PBXCopyFilesBuildPhase"][embedPhaseUUID] = {
         isa: "PBXCopyFilesBuildPhase",
         buildActionMask: 2147483647,
         dstPath: `""`,
         dstSubfolderSpec: 13,
-        files: [],
-        name: `"Embed Foundation Extensions"`,
+        files: [
+          {
+            value: buildFileUUID,
+            comment: `${EXTENSION_NAME}.appex in Embed Presence Extensions`,
+          },
+        ],
+        name: `"Embed Presence Extensions"`,
         runOnlyForDeploymentPostprocessing: 0,
       };
-      if (!objects["PBXCopyFilesBuildPhase"])
-        objects["PBXCopyFilesBuildPhase"] = {};
-      objects["PBXCopyFilesBuildPhase"][embedPhaseUUID] = embedPhase;
       objects["PBXCopyFilesBuildPhase"][`${embedPhaseUUID}_comment`] =
-        "Embed Foundation Extensions";
+        "Embed Presence Extensions";
 
-      const mainTargetObj = objects["PBXNativeTarget"][mainTargetUUID];
+      const mainTargetObj = objects["PBXNativeTarget"][mainTarget.uuid];
       if (mainTargetObj && Array.isArray(mainTargetObj.buildPhases)) {
         mainTargetObj.buildPhases.push({
           value: embedPhaseUUID,
-          comment: "Embed Foundation Extensions",
+          comment: "Embed Presence Extensions",
         });
       }
-    }
 
-    if (!embedPhase.files.some((f) => f.value === buildFileUUID)) {
-      embedPhase.files.push({
-        value: buildFileUUID,
-        comment: `${EXTENSION_NAME}.appex in Embed Foundation Extensions`,
-      });
+      xcodeProject.addTargetDependency(mainTarget.uuid, [extTarget.uuid]);
     }
-
-    xcodeProject.addTargetDependency(mainTargetUUID, [extTarget.uuid]);
 
     return cfg;
   });
@@ -246,21 +231,17 @@ function withExtensionScheme(config) {
         `${projectName}.xcscheme`,
       );
 
-      if (!fs.existsSync(schemePath)) return cfg;
-
-      let scheme = fs.readFileSync(schemePath, "utf8");
-      const before = scheme;
-
-      const extensionNamePattern = new RegExp(
-        `BlueprintName\\s*=\\s*"${EXTENSION_NAME}"`,
-      );
-      scheme = scheme.replace(
-        /<BuildActionEntry[^>]*>[\s\S]*?<\/BuildActionEntry>/g,
-        (match) => (extensionNamePattern.test(match) ? "" : match),
-      );
-
-      if (scheme !== before) fs.writeFileSync(schemePath, scheme, "utf8");
-
+      if (fs.existsSync(schemePath)) {
+        let scheme = fs.readFileSync(schemePath, "utf8");
+        const extensionNamePattern = new RegExp(
+          `BlueprintName\\s*=\\s*"${EXTENSION_NAME}"`,
+        );
+        scheme = scheme.replace(
+          /<BuildActionEntry[^>]*>[\s\S]*?<\/BuildActionEntry>/g,
+          (match) => (extensionNamePattern.test(match) ? "" : match),
+        );
+        fs.writeFileSync(schemePath, scheme, "utf8");
+      }
       return cfg;
     },
   ]);
