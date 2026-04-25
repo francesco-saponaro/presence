@@ -77,23 +77,27 @@ public class PresenceScreenTime: NSObject {
         }
 
         // CRITICAL FIX: The second mapping MUST be compactMap to unwrap the optional tokens
-        let apps = bundleIds.compactMap { Application(bundleIdentifier: $0) }
+        let apps = bundleIds.map { Application(bundleIdentifier: $0) }
         let tokens = Set(apps.compactMap { $0.token })
 
-        NSLog("[PresenceScreenTime] applyShield: input=%d bundleIds, apps=%d, tokens=%d",
-              bundleIds.count, apps.count, tokens.count)
-        for id in bundleIds {
-            let app = Application(bundleIdentifier: id)
-            NSLog("[PresenceScreenTime]   bundleId=%@ token=%@", id, app?.token != nil ? "OK" : "NIL")
+        NSLog("[PresenceScreenTime] applyShield: input=%d bundleIds, tokens=%d",
+              bundleIds.count, tokens.count)
+        for (id, app) in zip(bundleIds, apps) {
+            NSLog("[PresenceScreenTime]   bundleId=%@ token=%@", id, app.token != nil ? "OK" : "NIL")
         }
 
-        // Setting to nil when empty ensures we never leave a stale empty-set shield.
         if tokens.isEmpty {
-            NSLog("[PresenceScreenTime] tokens empty — shield NOT applied")
-            store.shield.applications = nil
+            // Tokens resolve to nil when FamilyControls cannot match the bundle ID
+            // (e.g. provisioning profile missing entitlement, or app not on device).
+            // Fall back to shielding ALL categories so blocking still works.
+            NSLog("[PresenceScreenTime] tokens empty — falling back to shield all categories")
+            store.shield.applicationCategories = .all()
+            store.shield.webDomainCategories = .all()
             resolve(["tokensApplied": 0, "appsFound": apps.count])
         } else {
             store.shield.applications = tokens
+            store.shield.applicationCategories = nil
+            store.shield.webDomainCategories = nil
             NSLog("[PresenceScreenTime] shield applied with %d tokens", tokens.count)
             resolve(["tokensApplied": tokens.count, "appsFound": apps.count])
         }
@@ -108,6 +112,7 @@ public class PresenceScreenTime: NSObject {
                              reject: @escaping RCTPromiseRejectBlock) {
         store.shield.applications = nil
         store.shield.applicationCategories = nil
+        store.shield.webDomainCategories = nil
         resolve(nil)
     }
 }

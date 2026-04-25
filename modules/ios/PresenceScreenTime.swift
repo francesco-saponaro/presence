@@ -5,8 +5,7 @@
 // (injected automatically by plugins/withScreenTime.js).
 //
 // Do NOT add `import React` here — React Native ObjC headers are provided
-// to Swift via the project's auto-generated bridging header.  Adding
-// `import React` causes "No such module 'React'" in classic-bridge builds.
+// to Swift via the project's auto-generated bridging header.
 
 import Foundation
 import FamilyControls
@@ -15,7 +14,6 @@ import ManagedSettings
 @objc(PresenceScreenTime)
 class PresenceScreenTime: NSObject {
 
-  // ManagedSettingsStore is available iOS 15+, same as our deployment target.
   private let store = ManagedSettingsStore()
 
   // MARK: – Authorization
@@ -25,7 +23,6 @@ class PresenceScreenTime: NSObject {
     _ resolve: @escaping RCTPromiseResolveBlock,
     rejecter reject: @escaping RCTPromiseRejectBlock
   ) {
-    // AuthorizationCenter.requestAuthorization(for: .individual) requires iOS 16.
     guard #available(iOS 16.0, *) else {
       reject("UNAVAILABLE", "Screen Time controls require iOS 16 or later.", nil)
       return
@@ -60,10 +57,6 @@ class PresenceScreenTime: NSObject {
   }
 
   // MARK: – Shield management
-  //
-  // ManagedSettingsStore is available iOS 15+, so no availability guard needed.
-  // For Phase 6 we will wire up real FamilyActivitySelection / ApplicationTokens.
-  // For now we shield ALL categories when the block window is active.
 
   @objc
   func applyShield(
@@ -71,9 +64,41 @@ class PresenceScreenTime: NSObject {
     resolver resolve: @escaping RCTPromiseResolveBlock,
     rejecter reject: @escaping RCTPromiseRejectBlock
   ) {
-    store.shield.applicationCategories = .all()
-    store.shield.webDomainCategories = .all()
-    resolve(nil)
+    let ids = bundleIds.compactMap { $0 as? String }
+
+    guard #available(iOS 16.0, *) else {
+      // iOS 15 fallback: shield all app categories
+      store.shield.applicationCategories = .all()
+      store.shield.webDomainCategories = .all()
+      resolve(["tokensApplied": 0, "appsFound": ids.count])
+      return
+    }
+
+    let apps = ids.map { Application(bundleIdentifier: $0) }
+    let tokens = Set(apps.compactMap { $0.token })
+
+    NSLog("[PresenceScreenTime] applyShield: input=%d bundleIds, resolved tokens=%d",
+          ids.count, tokens.count)
+    for (id, app) in zip(ids, apps) {
+      NSLog("[PresenceScreenTime]   bundleId=%@ token=%@",
+            id, app.token != nil ? "OK" : "NIL")
+    }
+
+    if tokens.isEmpty {
+      // Tokens resolve to nil when FamilyControls can't match the bundle ID
+      // (e.g. provisioning profile missing entitlement, or app not on device).
+      // Fall back to shielding all categories so blocking still works.
+      NSLog("[PresenceScreenTime] tokens empty — falling back to shield all categories")
+      store.shield.applicationCategories = .all()
+      store.shield.webDomainCategories = .all()
+      resolve(["tokensApplied": 0, "appsFound": ids.count])
+    } else {
+      store.shield.applications = tokens
+      store.shield.applicationCategories = nil
+      store.shield.webDomainCategories = nil
+      NSLog("[PresenceScreenTime] shield applied with %d specific app tokens", tokens.count)
+      resolve(["tokensApplied": tokens.count, "appsFound": ids.count])
+    }
   }
 
   @objc
@@ -81,7 +106,9 @@ class PresenceScreenTime: NSObject {
     _ resolve: @escaping RCTPromiseResolveBlock,
     rejecter reject: @escaping RCTPromiseRejectBlock
   ) {
-    store.clearAllSettings()
+    store.shield.applications = nil
+    store.shield.applicationCategories = nil
+    store.shield.webDomainCategories = nil
     resolve(nil)
   }
 
