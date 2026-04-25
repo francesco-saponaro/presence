@@ -57,9 +57,9 @@ function withExtensionFiles(config) {
     <key>CFBundlePackageType</key>
     <string>XPC!</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0.0</string>
+    <string>$(MARKETING_VERSION)</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>$(CURRENT_PROJECT_VERSION)</string>
     <key>NSExtension</key>
     <dict>
         <key>NSExtensionPointIdentifier</key>
@@ -170,6 +170,8 @@ function withExtensionTarget(config) {
             TARGETED_DEVICE_FAMILY: `"1"`,
             SWIFT_EMIT_LOC_STRINGS: "YES",
             DEVELOPMENT_TEAM: teamId || '""',
+            MARKETING_VERSION: `"${config.version || "1.0.0"}"`,
+            CURRENT_PROJECT_VERSION: `"${config.ios?.buildNumber || "1"}"`,
           });
         }
       });
