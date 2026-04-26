@@ -161,7 +161,7 @@ function withExtension(config) {
       }
     }
 
-    // 4. APPLY BUILD SETTINGS (CRITICAL FIXES HERE)
+    // 4. APPLY BUILD SETTINGS
     let teamId = "";
     const mainConfigListUUID = mainTarget.firstTarget.buildConfigurationList;
     const mainConfigList =
@@ -214,7 +214,7 @@ function withExtension(config) {
               '"$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"',
           };
 
-          // FIX 1: Only assign team ID if it exists. DO NOT inject an empty string.
+          // Only assign team ID if it exists. DO NOT inject an empty string.
           if (teamId) {
             newSettings.DEVELOPMENT_TEAM = teamId;
           }
@@ -267,7 +267,7 @@ function withExtension(config) {
       }
 
       if (embedPhase) {
-        // FIX 2: Scrub ANY existing references to this specific extension to prevent fastlane "Duplicate File" crash
+        // Scrub ANY existing references to this specific extension to prevent fastlane "Duplicate File" crash
         if (embedPhase.files) {
           embedPhase.files = embedPhase.files.filter((f) => {
             const fileObj = objects["PBXBuildFile"][f.value];
@@ -349,10 +349,64 @@ function withExtensionScheme(config) {
   ]);
 }
 
+// FIX: Patch the Podfile to disable code signing on resource bundle targets.
+// Required since Xcode 14 — otherwise archive fails with:
+// "resource bundles are signed by default, which requires setting the development team"
+function withPodfilePostInstall(config) {
+  return withDangerousMod(config, [
+    "ios",
+    async (cfg) => {
+      const podfilePath = path.join(
+        cfg.modRequest.platformProjectRoot,
+        "Podfile",
+      );
+      if (!fs.existsSync(podfilePath)) return cfg;
+
+      let contents = fs.readFileSync(podfilePath, "utf8");
+
+      const marker = "# PRESENCE_RESOURCE_BUNDLE_FIX";
+      if (contents.includes(marker)) return cfg;
+
+      const snippet = `
+    ${marker}
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |bc|
+        # Disable code signing for resource bundles (Xcode 14+ fix)
+        if target.respond_to?(:product_type) && target.product_type == "com.apple.product-type.bundle"
+          bc.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
+          bc.build_settings['CODE_SIGN_IDENTITY'] = ''
+          bc.build_settings['EXPANDED_CODE_SIGN_IDENTITY'] = ''
+          bc.build_settings['CODE_SIGNING_REQUIRED'] = 'NO'
+        end
+        # Bump deployment target to match the extension
+        current = bc.build_settings['IPHONEOS_DEPLOYMENT_TARGET']
+        if current.nil? || current.to_f < 16.0
+          bc.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '16.0'
+        end
+      end
+    end
+`;
+
+      if (contents.match(/post_install\s+do\s+\|installer\|/)) {
+        contents = contents.replace(
+          /(post_install\s+do\s+\|installer\|)/,
+          `$1\n${snippet}`,
+        );
+      } else {
+        contents += `\npost_install do |installer|\n${snippet}\nend\n`;
+      }
+
+      fs.writeFileSync(podfilePath, contents, "utf8");
+      return cfg;
+    },
+  ]);
+}
+
 module.exports = function withDeviceActivityMonitor(config) {
   config = withAppGroupEntitlement(config);
   config = withExtension(config);
   config = withExtensionScheme(config);
+  config = withPodfilePostInstall(config);
   return config;
 };
 
