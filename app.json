@@ -72,7 +72,7 @@
         }
       ],
       "./plugins/withScreenTime.js",
-      "./plugins/withDeviceActivityMonitor.js",
+      "@bacons/apple-targets",
       "./plugins/withAndroidBlocker.js",
       "./plugins/withSwiftFiles.js",
       [
@@ -90,25 +90,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "0790d724-e520-4239-987b-24ecc853d1f9",
-        "build": {
-          "experimental": {
-            "ios": {
-              "appExtensions": [
-                {
-                  "targetName": "PresenceMonitor",
-                  "bundleIdentifier": "com.franciccio.presence.PresenceMonitor",
-                  "entitlements": {
-                    "com.apple.developer.family-controls": true,
-                    "com.apple.security.application-groups": [
-                      "group.com.franciccio.presence"
-                    ]
-                  }
-                }
-              ]
-            }
-          }
-        }
+        "projectId": "0790d724-e520-4239-987b-24ecc853d1f9"
       }
     }
   }

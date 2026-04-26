@@ -11,6 +11,7 @@
     "lint": "expo lint"
   },
   "dependencies": {
+    "@bacons/apple-targets": "^4.0.6",
     "@expo-google-fonts/dm-sans": "^0.4.2",
     "@expo-google-fonts/dm-serif-display": "^0.4.2",
     "@expo/vector-icons": "^15.0.3",
