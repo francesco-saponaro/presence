@@ -385,6 +385,11 @@ function withExtensionTarget(config) {
             MARKETING_VERSION: `"${config.version || "1.0.0"}"`,
             CURRENT_PROJECT_VERSION: `"${config.ios?.buildNumber || "1"}"`,
             GENERATE_INFOPLIST_FILE: "NO",
+            MACH_O_TYPE: '"mh_execute"',
+            WRAPPER_EXTENSION: '"appex"',
+            EXECUTABLE_NAME: '"$(PRODUCT_NAME)"',
+            LD_RUNPATH_SEARCH_PATHS:
+              '"$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"',
           });
         }
       });
