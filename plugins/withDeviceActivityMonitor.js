@@ -19,15 +19,13 @@ function withAppGroupEntitlement(config) {
   });
 }
 
-// We combined the File Copying and the Target Creation into ONE step
-// to prevent the Expo race condition.
 function withExtension(config) {
   return withXcodeProject(config, (cfg) => {
     const xcodeProject = cfg.modResults;
     const iosRoot = cfg.modRequest.platformProjectRoot;
     const extDir = path.join(iosRoot, EXTENSION_NAME);
 
-    // 1. CREATE THE FILES SYNCHRONOUSLY FIRST
+    // 1. FILE CREATION
     fs.mkdirSync(extDir, { recursive: true });
 
     const swiftSrc = path.join(
@@ -37,8 +35,6 @@ function withExtension(config) {
     );
     if (fs.existsSync(swiftSrc)) {
       fs.copyFileSync(swiftSrc, path.join(extDir, "PresenceMonitor.swift"));
-    } else {
-      throw new Error(`CRITICAL: Could not find ${swiftSrc}`);
     }
 
     fs.writeFileSync(
@@ -92,7 +88,7 @@ function withExtension(config) {
 </plist>`,
     );
 
-    // 2. ADD TARGET TO XCODE
+    // 2. TARGET CREATION
     const bundleId = cfg.ios?.bundleIdentifier ?? "com.franciccio.presence";
     const extBundleId = `${bundleId}.${EXTENSION_NAME}`;
 
@@ -107,7 +103,7 @@ function withExtension(config) {
           (t.name === EXTENSION_NAME || t.name === `"${EXTENSION_NAME}"`),
       )
     ) {
-      return cfg;
+      return cfg; // Abort early to prevent target duplication
     }
 
     const extTarget = xcodeProject.addTarget(
@@ -116,53 +112,56 @@ function withExtension(config) {
       EXTENSION_NAME,
       extBundleId,
     );
-    const mainGroupKey = xcodeProject.getFirstProject().firstProject.mainGroup;
-
-    // 3. TELL XCODE TO COMPILE THE SWIFT FILE (It will succeed now because the file exists on disk)
-    const swiftFile = xcodeProject.addSourceFile(
-      `${EXTENSION_NAME}/PresenceMonitor.swift`,
-      { target: extTarget.uuid },
-      mainGroupKey,
-    );
-    if (!swiftFile) {
-      throw new Error("CRITICAL: Xcode failed to link the Swift file.");
-    }
-
-    // 4. GUARANTEE IT IS IN THE EXTENSION'S COMPILE PHASE
     const objects = xcodeProject.hash.project.objects;
     const mainTarget = xcodeProject.getFirstTarget();
+    const mainGroupKey = xcodeProject.getFirstProject().firstProject.mainGroup;
 
-    // Strip it from the main app so it doesn't duplicate
-    const mainTargetObj = objects["PBXNativeTarget"][mainTarget.uuid];
-    if (mainTargetObj && mainTargetObj.buildPhases) {
-      for (const phase of mainTargetObj.buildPhases) {
-        const phaseObj = objects["PBXSourcesBuildPhase"][phase.value];
-        if (phaseObj && phaseObj.files) {
-          phaseObj.files = phaseObj.files.filter(
-            (f) => f.value !== swiftFile.uuid,
-          );
-        }
-      }
+    // 3. FILE INJECTION
+    const fileRefUUID = xcodeProject.generateUuid();
+    if (!objects["PBXFileReference"]) objects["PBXFileReference"] = {};
+    objects["PBXFileReference"][fileRefUUID] = {
+      isa: "PBXFileReference",
+      lastKnownFileType: "sourcecode.swift",
+      name: `"PresenceMonitor.swift"`,
+      path: `"${EXTENSION_NAME}/PresenceMonitor.swift"`,
+      sourceTree: `"<group>"`,
+    };
+    objects["PBXFileReference"][`${fileRefUUID}_comment`] =
+      "PresenceMonitor.swift";
+
+    const buildFileUUID = xcodeProject.generateUuid();
+    if (!objects["PBXBuildFile"]) objects["PBXBuildFile"] = {};
+    objects["PBXBuildFile"][buildFileUUID] = {
+      isa: "PBXBuildFile",
+      fileRef: fileRefUUID,
+    };
+    objects["PBXBuildFile"][`${buildFileUUID}_comment`] =
+      "PresenceMonitor.swift in Sources";
+
+    if (objects["PBXGroup"] && objects["PBXGroup"][mainGroupKey]) {
+      if (!objects["PBXGroup"][mainGroupKey].children)
+        objects["PBXGroup"][mainGroupKey].children = [];
+      objects["PBXGroup"][mainGroupKey].children.push({
+        value: fileRefUUID,
+        comment: "PresenceMonitor.swift",
+      });
     }
 
-    // Force it into the extension
     const extTargetObj = objects["PBXNativeTarget"][extTarget.uuid];
     if (extTargetObj && extTargetObj.buildPhases) {
       for (const phase of extTargetObj.buildPhases) {
         const phaseObj = objects["PBXSourcesBuildPhase"][phase.value];
         if (phaseObj) {
           if (!phaseObj.files) phaseObj.files = [];
-          if (!phaseObj.files.some((f) => f.value === swiftFile.uuid)) {
-            phaseObj.files.push({
-              value: swiftFile.uuid,
-              comment: "PresenceMonitor.swift in Sources",
-            });
-          }
+          phaseObj.files.push({
+            value: buildFileUUID,
+            comment: "PresenceMonitor.swift in Sources",
+          });
         }
       }
     }
 
-    // 5. APPLY BUILD SETTINGS
+    // 4. APPLY BUILD SETTINGS (CRITICAL FIXES HERE)
     let teamId = "";
     const mainConfigListUUID = mainTarget.firstTarget.buildConfigurationList;
     const mainConfigList =
@@ -192,7 +191,7 @@ function withExtension(config) {
             typeof c === "object" ? c.value : c
           ];
         if (buildCfg && buildCfg.buildSettings) {
-          Object.assign(buildCfg.buildSettings, {
+          const newSettings = {
             SWIFT_VERSION: "5.0",
             PRODUCT_NAME: `"${EXTENSION_NAME}"`,
             PRODUCT_BUNDLE_IDENTIFIER: `"${extBundleId}"`,
@@ -205,16 +204,27 @@ function withExtension(config) {
             CODE_SIGN_STYLE: "Automatic",
             TARGETED_DEVICE_FAMILY: `"1"`,
             SWIFT_EMIT_LOC_STRINGS: "YES",
-            DEVELOPMENT_TEAM: teamId || '""',
             MARKETING_VERSION: `"${config.version || "1.0.0"}"`,
             CURRENT_PROJECT_VERSION: `"${config.ios?.buildNumber || "1"}"`,
             GENERATE_INFOPLIST_FILE: "NO",
-          });
+            MACH_O_TYPE: '"mh_execute"',
+            WRAPPER_EXTENSION: '"appex"',
+            EXECUTABLE_NAME: '"$(PRODUCT_NAME)"',
+            LD_RUNPATH_SEARCH_PATHS:
+              '"$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"',
+          };
+
+          // FIX 1: Only assign team ID if it exists. DO NOT inject an empty string.
+          if (teamId) {
+            newSettings.DEVELOPMENT_TEAM = teamId;
+          }
+
+          Object.assign(buildCfg.buildSettings, newSettings);
         }
       });
     }
 
-    // 6. EMBED THE EXTENSION INTO THE MAIN APP
+    // 5. EMBED EXTENSION WITHOUT DUPLICATES
     let extProductRef = null;
     Object.entries(objects["PBXNativeTarget"] || {}).forEach(([, t]) => {
       if (
@@ -227,15 +237,15 @@ function withExtension(config) {
     });
 
     if (extProductRef) {
-      const buildFileUUID = xcodeProject.generateUuid();
+      const embedBuildFileUUID = xcodeProject.generateUuid();
       if (!objects["PBXBuildFile"]) objects["PBXBuildFile"] = {};
-      objects["PBXBuildFile"][buildFileUUID] = {
+      objects["PBXBuildFile"][embedBuildFileUUID] = {
         isa: "PBXBuildFile",
         fileRef: extProductRef,
         fileRef_comment: `${EXTENSION_NAME}.appex`,
         settings: { ATTRIBUTES: ["RemoveHeadersOnCopy"] },
       };
-      objects["PBXBuildFile"][`${buildFileUUID}_comment`] =
+      objects["PBXBuildFile"][`${embedBuildFileUUID}_comment`] =
         `${EXTENSION_NAME}.appex in Embed App Extensions`;
 
       let embedPhaseUUID = null;
@@ -257,12 +267,20 @@ function withExtension(config) {
       }
 
       if (embedPhase) {
-        if (!embedPhase.files.some((f) => f.value === buildFileUUID)) {
-          embedPhase.files.push({
-            value: buildFileUUID,
-            comment: `${EXTENSION_NAME}.appex in ${embedPhase.name || "Embed App Extensions"}`,
+        // FIX 2: Scrub ANY existing references to this specific extension to prevent fastlane "Duplicate File" crash
+        if (embedPhase.files) {
+          embedPhase.files = embedPhase.files.filter((f) => {
+            const fileObj = objects["PBXBuildFile"][f.value];
+            return !fileObj || fileObj.fileRef !== extProductRef;
           });
+        } else {
+          embedPhase.files = [];
         }
+
+        embedPhase.files.push({
+          value: embedBuildFileUUID,
+          comment: `${EXTENSION_NAME}.appex in ${embedPhase.name || "Embed App Extensions"}`,
+        });
       } else {
         embedPhaseUUID = xcodeProject.generateUuid();
         embedPhase = {
@@ -272,7 +290,7 @@ function withExtension(config) {
           dstSubfolderSpec: 13,
           files: [
             {
-              value: buildFileUUID,
+              value: embedBuildFileUUID,
               comment: `${EXTENSION_NAME}.appex in Embed App Extensions`,
             },
           ],
@@ -285,6 +303,7 @@ function withExtension(config) {
         objects["PBXCopyFilesBuildPhase"][`${embedPhaseUUID}_comment`] =
           "Embed App Extensions";
 
+        const mainTargetObj = objects["PBXNativeTarget"][mainTarget.uuid];
         if (mainTargetObj && Array.isArray(mainTargetObj.buildPhases)) {
           mainTargetObj.buildPhases.push({
             value: embedPhaseUUID,
@@ -332,7 +351,7 @@ function withExtensionScheme(config) {
 
 module.exports = function withDeviceActivityMonitor(config) {
   config = withAppGroupEntitlement(config);
-  config = withExtension(config); // The unified function
+  config = withExtension(config);
   config = withExtensionScheme(config);
   return config;
 };
