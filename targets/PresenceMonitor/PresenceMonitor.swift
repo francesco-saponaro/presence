@@ -18,6 +18,7 @@ import Foundation
 // No @available needed — deployment target is iOS 16.0 (set in expo-target.config.js),
 // so DeviceActivityMonitor is always available. Placing @available on the class breaks
 // the ObjC principal-class lookup iOS uses when loading the extension.
+@objc(PresenceMonitor)
 class PresenceMonitor: DeviceActivityMonitor {
 
     private let store = ManagedSettingsStore()
