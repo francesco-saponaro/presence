@@ -9,6 +9,7 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "buildNumber": "20",
+      "appleTeamId": "86BLA5VR2L",
       "supportsTablet": false,
       "bundleIdentifier": "com.franciccio.presence",
       "infoPlist": {

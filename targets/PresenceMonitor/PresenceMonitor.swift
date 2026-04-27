@@ -15,7 +15,9 @@ import Foundation
  *   group.com.franciccio.presence / familyActivitySelection  — base64 selection
  *   group.com.franciccio.presence / blockFrequency           — "daily"|"5x"|"weekends"
  */
-@available(iOS 16.0, *)
+// No @available needed — deployment target is iOS 16.0 (set in expo-target.config.js),
+// so DeviceActivityMonitor is always available. Placing @available on the class breaks
+// the ObjC principal-class lookup iOS uses when loading the extension.
 class PresenceMonitor: DeviceActivityMonitor {
 
     private let store = ManagedSettingsStore()
