@@ -30,11 +30,11 @@ Deno.serve(async (req: Request) => {
 
   try {
     const body = await req.json();
-    senderEmail = body.email;
-    message = body.message;
-    if (!senderEmail || !message) throw new Error("Missing fields");
+    senderEmail = (body.email ?? "").trim();
+    message = (body.message ?? "").trim();
+    if (!message) throw new Error("Missing fields");
   } catch {
-    return new Response(JSON.stringify({ error: "email and message are required" }), {
+    return new Response(JSON.stringify({ error: "message is required" }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
@@ -44,10 +44,10 @@ Deno.serve(async (req: Request) => {
   const FROM_EMAIL = Deno.env.get("FROM_EMAIL");
   const SUPPORT_EMAIL = Deno.env.get("SUPPORT_EMAIL");
 
-  if (!RESEND_API_KEY) {
-    console.warn("RESEND_API_KEY not set — skipping contact email");
+  if (!RESEND_API_KEY || !FROM_EMAIL || !SUPPORT_EMAIL) {
+    console.error("Missing required secrets: RESEND_API_KEY / FROM_EMAIL / SUPPORT_EMAIL");
     return new Response(JSON.stringify({ skipped: true }), {
-      status: 200,
+      status: 503,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

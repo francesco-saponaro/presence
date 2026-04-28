@@ -1,6 +1,7 @@
 import { toastConfig } from "@/components/toastConfig";
 import i18n from "@/i18n";
 import { routeAfterAuth } from "@/lib/authRouting";
+import * as Notifications from "expo-notifications";
 import { initNotifications } from "@/lib/notifications";
 import {
   checkEntitlement,
@@ -102,6 +103,14 @@ export default function RootLayout() {
   // Initialize notifications once on mount (sets handler + schedules warm-up).
   useEffect(() => {
     initNotifications();
+  }, []);
+
+  // Route to home when the user taps either notification.
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener(() => {
+      router.replace("/(tabs)" as any);
+    });
+    return () => sub.remove();
   }, []);
 
   // Keep Zustand session store in sync with Supabase for the entire app lifetime.

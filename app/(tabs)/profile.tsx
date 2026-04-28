@@ -241,13 +241,21 @@ export default function ProfileScreen() {
 
   async function handleSendFeedback() {
     if (!feedbackMessage.trim()) return;
-    const userEmail = useUserStore.getState().email ?? "";
+    // Prefer the persisted email; fall back to the live Supabase session if the
+    // store hasn't hydrated yet or was cleared.
+    const storeEmail = useUserStore.getState().email;
+    const sessionEmail =
+      (await supabase.auth.getSession()).data.session?.user.email ?? "";
+    const userEmail = storeEmail ?? sessionEmail;
     setSendingFeedback(true);
     try {
-      const { error } = await supabase.functions.invoke("contact", {
+      const { data, error } = await supabase.functions.invoke("contact", {
         body: { email: userEmail, message: feedbackMessage.trim() },
       });
       if (error) throw error;
+      // The function returns { skipped: true } when RESEND_API_KEY is not
+      // configured in Supabase secrets — treat this as a delivery failure.
+      if (data?.skipped) throw new Error("Email service not configured");
       feedbackSheetRef.current?.dismiss();
       setFeedbackMessage("");
       Toast.show({ type: "success", text1: "Sent. Thanks for reaching out." });
