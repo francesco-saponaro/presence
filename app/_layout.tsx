@@ -71,14 +71,27 @@ export default function RootLayout() {
     return () => sub.remove();
   }, []);
 
-  // Restore language on cold start.
-  // Only override the device-detected default if the user explicitly picked a language.
+  // Restore language once the userStore has finished hydrating from AsyncStorage.
+  // Reading userStore before hydration returns the initial defaults (language:"en",
+  // languageSetByUser:false), which is why the old one-shot useEffect always missed
+  // a user-stored language preference.
+  const userHydrated = useUserStore((s) => s._hasHydrated);
   useEffect(() => {
+    if (!userHydrated) return;
     const { language, languageSetByUser } = useUserStore.getState();
-    if (languageSetByUser && language && language !== i18n.language) {
-      i18n.changeLanguage(language);
+    if (languageSetByUser && language) {
+      // User explicitly picked a language — honour it regardless of device locale.
+      if (language !== i18n.language) i18n.changeLanguage(language);
+    } else {
+      // No explicit choice yet — sync the store label to whatever i18n detected from
+      // the device so the profile picker always shows the real active language.
+      const detected = i18n.language;
+      if (detected && detected !== language) {
+        // Update store label only (languageSetByUser stays false — this is auto).
+        useUserStore.setState({ language: detected });
+      }
     }
-  }, []);
+  }, [userHydrated]);
 
   // Start the shield engine once on mount (AppState listener + schedule check).
   useEffect(() => {

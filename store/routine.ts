@@ -19,6 +19,7 @@ interface RoutineState {
   setBlockedAppNames: (names: Record<string, string>) => void;
   setFamilyActivitySelection: (base64: string | null) => void;
   setTrustedContacts: (contacts: string[]) => void;
+  clearSchedule: () => void;
 }
 
 export const useRoutineStore = create<RoutineState>()(
@@ -36,6 +37,7 @@ export const useRoutineStore = create<RoutineState>()(
       setBlockedAppNames: (blockedAppNames) => set({ blockedAppNames }),
       setFamilyActivitySelection: (familyActivitySelection) => set({ familyActivitySelection }),
       setTrustedContacts: (trustedContacts) => set({ trustedContacts }),
+      clearSchedule: () => set({ blockTimeUtc: null, frequency: null }),
     }),
     {
       name: "presence-routine",

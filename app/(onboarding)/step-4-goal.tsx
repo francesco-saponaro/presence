@@ -13,8 +13,10 @@ import {
 import type { BottomSheetBackdropProps } from "@gorhom/bottom-sheet";
 import { useOnboardingStore } from "@/store/onboardingStore";
 import { useRoutineStore } from "@/store/routine";
+import { ensureScreenTimeAuth, deactivateSchedule } from "@/lib/shieldEngine";
 import { OnboardingProgress } from "@/components/ui/OnboardingProgress";
 import { PillButton } from "@/components/ui/PillButton";
+import Toast from "react-native-toast-message";
 
 type Frequency = "daily" | "5x" | "weekends";
 
@@ -63,12 +65,39 @@ export default function Step4Goal() {
     else router.replace("/(onboarding)/step-4-how");
   }
 
+  function scheduleStartToast(time: Date) {
+    const now = new Date();
+    const todayAtTime = new Date();
+    todayAtTime.setHours(time.getHours(), time.getMinutes(), 0, 0);
+    const minutesUntil = (todayAtTime.getTime() - now.getTime()) / (1000 * 60);
+    const timeStr = formatTime(time);
+
+    if (minutesUntil >= 20) {
+      Toast.show({
+        type: "success",
+        text1: t("blockTime.startsToday", { time: timeStr }),
+        visibilityTime: 4000,
+      });
+    } else {
+      Toast.show({
+        type: "info",
+        text1: t("blockTime.startsTomorrow", { time: timeStr }),
+        visibilityTime: 8000,
+        position: "top",
+      });
+    }
+  }
+
   function handleNext() {
     // Convert local time to UTC ISO string for storage
     setBlockTime(selectedTime.toISOString());
     setFrequency(frequency);
+    scheduleStartToast(selectedTime);
     setCurrentStep(6);
     router.push("/(onboarding)/step-6-contacts");
+    // Fire-and-forget: permissions step (step-6-permissions) handles the main
+    // Screen Time prompt, but re-prompt here if somehow already denied/revoked.
+    ensureScreenTimeAuth().catch(console.warn);
   }
 
   return (
@@ -144,6 +173,19 @@ export default function Step4Goal() {
         style={{ paddingBottom: Math.max(insets.bottom, 24) }}
       >
         <PillButton label={t("common.continue")} variant="primary" onPress={handleNext} />
+        <TouchableOpacity
+          onPress={() => {
+            deactivateSchedule().catch(console.warn);
+            setCurrentStep(6);
+            router.push("/(onboarding)/step-6-contacts");
+          }}
+          activeOpacity={0.6}
+          className="mt-4 items-center py-2"
+        >
+          <Text className="font-sans-body text-sm text-greige dark:text-greige">
+            {t("blockTime.skipForNow")}
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {/* Time Picker Bottom Sheet */}

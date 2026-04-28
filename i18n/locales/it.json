@@ -226,6 +226,17 @@
     "version": "Versione {{version}}",
     "copyright": "© 2026 Presence. Tutti i diritti riservati."
   },
+  "blockTime": {
+    "startsToday": "Lo scudo parte oggi alle {{time}}.",
+    "startsTomorrow": "Attenzione — meno di 20 minuti. Il tuo scudo partirà domani alle {{time}}.",
+    "screenTimeOffTitle": "Tempo di utilizzo disattivato",
+    "screenTimeOffBody": "Tocca qui per riattivarlo nelle Impostazioni in modo che Presence possa bloccare le tue app.",
+    "screenTimeNearTitle": "Il tempo di utilizzo deve essere attivo",
+    "screenTimeNearBody": "Il tuo orario di blocco è quasi arrivato e Tempo di utilizzo è disattivato. Tocca qui per risolvere nelle Impostazioni.",
+    "removeSchedule": "Rimuovi orario",
+    "scheduleRemoved": "Orario rimosso.",
+    "skipForNow": "Salta per ora"
+  },
   "shield": {
     "title": "Sostituisci l'invio di meme con una vera connessione. Scrivi a qualcuno, carica lo screenshot e sblocca le tue app.",
     "verifying": "Verifica connessione in corso...",

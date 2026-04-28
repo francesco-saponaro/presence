@@ -14,6 +14,7 @@ import type { BottomSheetBackdropProps } from "@gorhom/bottom-sheet";
 import { useRoutineStore } from "@/store/routine";
 import { getLocalBlockTime } from "@/lib/timezone";
 import { syncRoutineToSupabase } from "@/lib/routineSync";
+import { ensureScreenTimeAuth, deactivateSchedule } from "@/lib/shieldEngine";
 import { PillButton } from "@/components/ui/PillButton";
 import Toast from "react-native-toast-message";
 
@@ -68,12 +69,39 @@ export default function BlockTimeScreen() {
     sheetRef.current?.dismiss();
   }
 
+  function scheduleStartToast(time: Date) {
+    const now = new Date();
+    const todayAtTime = new Date();
+    todayAtTime.setHours(time.getHours(), time.getMinutes(), 0, 0);
+    const minutesUntil = (todayAtTime.getTime() - now.getTime()) / (1000 * 60);
+    const timeStr = formatTime(time);
+
+    if (minutesUntil >= 20) {
+      Toast.show({
+        type: "success",
+        text1: t("profile.scheduleSaved"),
+        text2: t("blockTime.startsToday", { time: timeStr }),
+        visibilityTime: 5000,
+      });
+    } else {
+      Toast.show({
+        type: "info",
+        text1: t("profile.scheduleSaved"),
+        text2: t("blockTime.startsTomorrow", { time: timeStr }),
+        visibilityTime: 8000,
+        position: "top",
+      });
+    }
+  }
+
   async function handleSave() {
     setBlockTime(selectedTime.toISOString());
     setFrequency(frequency);
     syncRoutineToSupabase().catch(() => {});
-    Toast.show({ type: "success", text1: t("profile.scheduleSaved") });
+    scheduleStartToast(selectedTime);
     router.back();
+    // Fire-and-forget: re-prompt for Screen Time auth if needed (iOS only)
+    ensureScreenTimeAuth().catch(console.warn);
   }
 
   return (
@@ -136,12 +164,25 @@ export default function BlockTimeScreen() {
         </View>
       </View>
 
-      {/* Save */}
+      {/* Save + Remove */}
       <View
         className="px-6 pt-4 border-t border-surface-light dark:border-surface-dark"
         style={{ paddingBottom: Math.max(insets.bottom, 24) }}
       >
         <PillButton label={t("common.save")} variant="primary" onPress={handleSave} />
+        <TouchableOpacity
+          onPress={async () => {
+            await deactivateSchedule();
+            Toast.show({ type: "success", text1: t("blockTime.scheduleRemoved") });
+            router.back();
+          }}
+          activeOpacity={0.6}
+          className="mt-4 items-center py-2"
+        >
+          <Text className="font-sans-body text-sm text-greige dark:text-greige">
+            {t("blockTime.removeSchedule")}
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {/* Time picker sheet */}

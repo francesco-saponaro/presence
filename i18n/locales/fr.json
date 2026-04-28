@@ -226,6 +226,17 @@
     "version": "Version {{version}}",
     "copyright": "© 2026 Presence. Tous droits réservés."
   },
+  "blockTime": {
+    "startsToday": "Le bouclier démarre aujourd'hui à {{time}}.",
+    "startsTomorrow": "Attention — moins de 20 minutes. Votre bouclier démarrera demain à {{time}}.",
+    "screenTimeOffTitle": "Temps d'écran désactivé",
+    "screenTimeOffBody": "Appuyez ici pour le réactiver dans Réglages afin que Presence puisse bloquer vos apps.",
+    "screenTimeNearTitle": "Temps d'écran doit être activé",
+    "screenTimeNearBody": "Votre heure de blocage approche et Temps d'écran est désactivé. Appuyez ici pour le corriger dans Réglages.",
+    "removeSchedule": "Supprimer le planning",
+    "scheduleRemoved": "Planning supprimé.",
+    "skipForNow": "Passer pour l'instant"
+  },
   "shield": {
     "title": "Remplacez l'envoi de mèmes par une vraie connexion. Écrivez à quelqu'un, téléchargez la capture et déverrouillez vos apps.",
     "verifying": "Vérification...",

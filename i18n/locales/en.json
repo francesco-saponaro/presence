@@ -226,6 +226,17 @@
     "version": "Version {{version}}",
     "copyright": "© 2026 Presence. All rights reserved."
   },
+  "blockTime": {
+    "startsToday": "Shield starts today at {{time}}.",
+    "startsTomorrow": "Heads up — less than 20 minutes away. Your shield will start tomorrow at {{time}}.",
+    "screenTimeOffTitle": "Screen Time is off",
+    "screenTimeOffBody": "Tap here to re-enable it in Settings so Presence can lock your apps at the scheduled time.",
+    "screenTimeNearTitle": "Screen Time needs to be on",
+    "screenTimeNearBody": "Your block time is almost here and Screen Time is disabled. Tap here to fix it in Settings.",
+    "removeSchedule": "Remove schedule",
+    "scheduleRemoved": "Schedule removed.",
+    "skipForNow": "Skip for now"
+  },
   "shield": {
     "title": "Replace meme sending with actual genuine connection. Text someone, upload the screenshot, and unlock your apps.",
     "verifying": "Verifying your connection...",

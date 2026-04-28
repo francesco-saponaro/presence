@@ -12,6 +12,7 @@ interface UserState {
   lastConnectionDate: string | null; // "YYYY-MM-DD" local date
   language: string;         // persisted i18n locale code
   languageSetByUser: boolean; // true only after an explicit manual selection
+  _hasHydrated: boolean;
 
   setUser: (userId: string, email: string) => void;
   setSubscribed: (isSubscribed: boolean, expiresAt?: string | null) => void;
@@ -25,6 +26,7 @@ interface UserState {
   /** @deprecated use recordConnection instead */
   incrementConnections: () => void;
   setLanguage: (lang: string) => void;
+  setHasHydrated: (val: boolean) => void;
   clearUser: () => void;
 }
 
@@ -50,6 +52,7 @@ export const useUserStore = create<UserState>()(
       lastConnectionDate: null,
       language: "en",
       languageSetByUser: false,
+      _hasHydrated: false,
 
       setUser: (userId, email) => set({ userId, email }),
 
@@ -89,6 +92,7 @@ export const useUserStore = create<UserState>()(
         })),
 
       setLanguage: (language) => set({ language, languageSetByUser: true }),
+      setHasHydrated: (val) => set({ _hasHydrated: val }),
 
       clearUser: () =>
         set({
@@ -106,6 +110,9 @@ export const useUserStore = create<UserState>()(
     {
       name: "presence-user",
       storage: createJSONStorage(() => storage),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
     }
   )
 );

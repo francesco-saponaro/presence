@@ -12,18 +12,80 @@
  * Call startShieldEngine() once from the root layout.
  */
 
-import { AppState, AppStateStatus, Platform } from "react-native";
+import { AppState, AppStateStatus, Linking, Platform } from "react-native";
 import Toast from "react-native-toast-message";
+import i18n from "@/i18n";
 import { useShieldStore } from "@/store/shield";
 import { useRoutineStore } from "@/store/routine";
 import { useUserStore } from "@/store/userStore";
-import { isBlockTimeActive, getLocalBlockTime } from "./timezone";
+import { isBlockTimeActive, getLocalBlockTime, msUntilNextBlock } from "./timezone";
 import { ScreenTimeModule, BlockerModule, addShieldActivatedListener } from "./nativeModules";
 import { supabase } from "./supabase";
-import { scheduleInactivityNotification } from "./notifications";
+import { scheduleInactivityNotification, cancelWarmupNotification } from "./notifications";
 
 // Throttle the "Screen Time disabled" toast to once per app session.
 let _screenTimeWarningShown = false;
+// Throttle the near-block-time Screen Time prompt separately so it fires
+// once per session when entering the 20-minute approach window.
+let _screenTimeNearBlockShown = false;
+
+// ── Screen Time auth helpers ─────────────────────────────────────────────────
+
+/**
+ * Call this when the user schedules or edits a block time.
+ * If FamilyControls is not authorised it shows the native system prompt
+ * (notDetermined), or a tappable Settings-deep-link toast (denied).
+ */
+export async function ensureScreenTimeAuth(): Promise<void> {
+  if (Platform.OS !== "ios") return;
+  try {
+    const status = await ScreenTimeModule.getAuthorizationStatus();
+    if (status === "approved") return;
+
+    if (status === "denied") {
+      Toast.show({
+        type: "error",
+        text1: i18n.t("blockTime.screenTimeOffTitle"),
+        text2: i18n.t("blockTime.screenTimeOffBody"),
+        visibilityTime: 8000,
+        onPress: () => Linking.openURL("app-settings:"),
+      });
+      return;
+    }
+
+    // notDetermined (or unknown) — show the native FamilyControls system prompt
+    await ScreenTimeModule.requestAuthorization().catch((e: unknown) =>
+      console.warn("[shieldEngine] ensureScreenTimeAuth requestAuthorization:", JSON.stringify(e))
+    );
+  } catch {
+    // Native module unavailable on simulator / old build — ignore
+  }
+}
+
+/**
+ * Deactivates the user's schedule entirely:
+ * clears local Zustand state, stops the DeviceActivity monitor, lifts any
+ * active shield, and cancels the warm-up notification.
+ * Does NOT sync to Supabase (the DB row keeps the old values; when the user
+ * creates a new schedule it will be overwritten by the next syncRoutineToSupabase).
+ */
+export async function deactivateSchedule(): Promise<void> {
+  const { isBlocked, setBlocked } = useShieldStore.getState();
+  const { clearSchedule } = useRoutineStore.getState();
+
+  clearSchedule();
+
+  if (isBlocked) {
+    setBlocked(false);
+    await deactivateNativeShield();
+  }
+
+  if (Platform.OS === "ios") {
+    await ScreenTimeModule.stopMonitoring().catch(console.warn);
+  }
+
+  await cancelWarmupNotification().catch(console.warn);
+}
 
 // ── Native shield primitives ─────────────────────────────────────────────────
 
@@ -106,18 +168,37 @@ export async function checkAndUpdateShield(): Promise<void> {
       if (authStatus === "denied") {
         // Screen Time was disabled in Settings. iOS does not allow
         // requestAuthorization() to re-prompt — the user must re-enable manually.
-        if (!_screenTimeWarningShown) {
+        const { blockTimeUtc } = useRoutineStore.getState();
+        const minutesUntilBlock = blockTimeUtc
+          ? msUntilNextBlock(blockTimeUtc) / 60_000
+          : Infinity;
+        const isNearBlockTime = minutesUntilBlock <= 20;
+
+        if (isNearBlockTime && !_screenTimeNearBlockShown) {
+          // Approaching block time: show urgent tappable toast directing to Settings.
+          _screenTimeNearBlockShown = true;
+          Toast.show({
+            type: "error",
+            text1: i18n.t("blockTime.screenTimeNearTitle"),
+            text2: i18n.t("blockTime.screenTimeNearBody"),
+            visibilityTime: 10000,
+            onPress: () => Linking.openURL("app-settings:"),
+          });
+        } else if (!isNearBlockTime && !_screenTimeWarningShown) {
           _screenTimeWarningShown = true;
           Toast.show({
             type: "error",
-            text1: "Screen Time disabled",
-            text2: "Re-enable Screen Time in Settings to keep Presence active.",
+            text1: i18n.t("blockTime.screenTimeOffTitle"),
+            text2: i18n.t("blockTime.screenTimeOffBody"),
             visibilityTime: 6000,
+            onPress: () => Linking.openURL("app-settings:"),
           });
         }
         return; // nothing more we can do until user re-enables Screen Time
       } else if (authStatus === "notDetermined") {
-        // Never authorised (fresh install or reset) — show the system prompt.
+        // Never authorised (fresh install or reset), OR the user revoked Screen Time
+        // in Settings (which returns the status to notDetermined on iOS 16+).
+        // Show the native FamilyControls system prompt.
         console.log("[shieldEngine] auth notDetermined, requesting...");
         await ScreenTimeModule.requestAuthorization().catch((e: unknown) =>
           console.warn("[shieldEngine] requestAuthorization failed:", JSON.stringify(e))
@@ -240,7 +321,8 @@ export async function syncPendingConnections(): Promise<void> {
  *   4. Opportunistic sync of any pending offline connections.
  */
 export function startShieldEngine(): () => void {
-  _screenTimeWarningShown = false; // reset per app session
+  _screenTimeWarningShown = false;   // reset per app session
+  _screenTimeNearBlockShown = false; // reset per app session
   checkAndUpdateShield().catch(console.warn);
   syncPendingConnections().catch(console.warn);
 

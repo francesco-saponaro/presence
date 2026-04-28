@@ -21,6 +21,7 @@
 - **Notifications:** `expo-notifications` (local push only — no Expo push server).
 - **Native Modules (Cross-Platform):** Custom Swift (iOS) and Kotlin (Android) code injected via Expo Config Plugins.
   - **iOS:** Apple `FamilyControls`, `ManagedSettings`, `DeviceActivity`, Apple `Vision` framework (OCR), and SwiftUI `FamilyActivityPicker` (app selection). The picker is exposed as the `PresencePicker` native module (`native-src/PresencePicker.swift` + `native-src/PresencePicker.m`). Requires iOS 16+.
+  - **iOS App Extension:** The `DeviceActivityMonitor` extension (`targets/PresenceMonitor/DeviceActivityMonitorExtension.swift`) is a separate Apple App Extension managed by `@bacons/apple-targets` (configured via `targets/PresenceMonitor/expo-target.config.js`). It runs out-of-process and applies/lifts the `ManagedSettingsStore` shield at the scheduled block time, even when the main app is closed.
   - **Android:** `UsageStatsManager` (App detection), `SYSTEM_ALERT_WINDOW` (Overlay Shield), and Google `ML Kit Vision` (OCR).
 - **i18n:** `react-i18next` natively supporting English (en), Spanish (es), French (fr), Italian (it), and Portuguese (pt).
 - **App Rating:** `expo-store-review` (For strategic App Store rating prompts).
@@ -40,11 +41,20 @@
 1. **Localization is Mandatory:** DO NOT hardcode any English text directly into React components. Every user-facing string must be wrapped in the `t()` function from `react-i18next`. All 5 locale files (en, es, fr, it, pt) in `i18n/locales/` must be updated simultaneously.
 2. **Local Assets & Expo Image:** DO NOT use external URLs, Unsplash links, or standard RN `<Image>`. You MUST use `expo-image` and load the specific provided local files (e.g., `source={require('../assets/images/onboarding-1.png')}`). Ensure `contentFit="contain"` is used so backgrounds blend perfectly into the `#FAF7F2` or `#261B10` app backgrounds.
 3. **No Confetti/Cheap UI:** Use heavy `@gorhom/bottom-sheet`, smooth premium transitions (`react-native-reanimated`), and glassmorphism (`expo-glass-effect`).
-4. **Native Swift Bridges — Two-Plugin Architecture (CRITICAL):** ALL custom Swift/ObjC code lives in `native-src/`. Two plugins work together during EAS prebuild:
+4. **Native Swift Bridges — Two Separate Architectures (CRITICAL):** iOS native code is split across two distinct systems depending on whether the code runs in the main app process or as an App Extension.
+
+   **A. Main app native modules** — `native-src/` → compiled into the main Presence app target via two plugins:
    - **`plugins/withSwiftFiles.js`** — copies `native-src/*.swift` and `native-src/*.m` to the `ios/` root directory (i.e. `ios/PresenceScreenTime.swift` etc.). This is the location the Xcode project file actually references for compilation.
    - **`plugins/withScreenTime.js`** — adds the files to the Xcode build target's Sources phase via `addSourceFile()`. Without this the files exist in `ios/` but are not compiled.
    - **CRITICAL:** The `modules/ios/` directory also contains Swift files but they are NOT compiled by Xcode — those are dead copies from an earlier architecture. Only edit `native-src/` files. Never edit `modules/ios/` Swift files expecting them to take effect.
    - To add a new native Swift file: (1) create it in `native-src/`, (2) add its filename to the `filesToCopy` array in both `withSwiftFiles.js` and `NATIVE_FILES` in `withScreenTime.js`, (3) create its `.m` ObjC bridge in `native-src/`, (4) expose it in `lib/nativeModules.ts`.
+
+   **B. DeviceActivityMonitor App Extension** — `targets/PresenceMonitor/` → compiled as a separate iOS App Extension target managed by `@bacons/apple-targets`:
+   - The extension file is `targets/PresenceMonitor/DeviceActivityMonitorExtension.swift` (class `DeviceActivityMonitorExtension: DeviceActivityMonitor`).
+   - Its target metadata (type, name, entitlements, deployment target) lives in `targets/PresenceMonitor/expo-target.config.js`. Type is `"device-activity-monitor"`.
+   - `@bacons/apple-targets` (listed in `app.json` `plugins`) reads every `targets/*/expo-target.config.js` and creates the Xcode extension target automatically during EAS prebuild. No manual Xcode editing needed.
+   - This extension runs **out-of-process** — it has no RN bridge and cannot import React. It communicates with the main app exclusively via the shared App Group UserDefaults (`group.com.franciccio.presence`).
+   - **Never** move `DeviceActivityMonitorExtension.swift` into `native-src/` or try to compile it via `withSwiftFiles.js` — the extension must be its own Xcode target, not part of the main app bundle.
 5. **Native Module Bridging & Imports:** The project uses modern Expo where the New Architecture (newArchEnabled) is true by default. We are utilizing the interop layer for our custom native modules using the RCT_EXTERN_MODULE / RCT_EXTERN_METHOD ObjC bridge pattern. CRITICAL: Because of this, if a Swift file utilizes RCTPromiseResolveBlock or RCTPromiseRejectBlock, it MUST explicitly contain import React at the top of the Swift file, otherwise the EAS cloud compiler will fail.
 6. **Zod v4 API:** This project uses Zod v4. The `errorMap` option is renamed to `error`. Use `z.literal(true, { error: "..." })` not `{ errorMap: ... }`.
 7. **OAuth & Direct Sign-Up (Supabase):** Email confirmation must be **disabled** in the Supabase dashboard (`Auth > Providers > Email > Confirm email: OFF`) for direct sign-up to work. Apple uses `expo-apple-authentication` → `signInWithIdToken`. Google uses `signInWithOAuth` + `expo-web-browser` + `exchangeCodeForSession` (see Section 6A for full detail). The Apple button must only render on `Platform.OS === 'ios'`. Add `presence://` and `presence://auth/callback` to Supabase `Auth > URL Configuration > Redirect URLs`.
@@ -156,12 +166,17 @@ All post-auth navigation is centralised in two places — never scatter `router.
 ### D. The Core Engine (Native OCR & Shield)
 
 - **The Blocker (Cross-Platform):**
-  - **iOS:** Uses `AuthorizationCenter.shared` (FamilyControls) and `ManagedSettingsStore` to apply native Shields. **CRITICAL — App selection flow:**
+  - **iOS:** Uses `AuthorizationCenter.shared` (FamilyControls) and `ManagedSettingsStore` to apply native Shields. Shielding is triggered in two ways:
+    - **Scheduled (out-of-process):** The `DeviceActivityMonitorExtension` (`targets/PresenceMonitor/DeviceActivityMonitorExtension.swift`) is an Apple App Extension managed by `@bacons/apple-targets`. The OS launches it at the scheduled block time via `DeviceActivitySchedule`, even when the main app is closed. It reads `familyActivitySelection` and `blockFrequency` from the shared App Group UserDefaults (`group.com.franciccio.presence`) and calls `ManagedSettingsStore` directly — no RN bridge involved.
+    - **On-demand (from main app):** `shieldEngine.ts` calls `ScreenTimeModule.applyShieldFromSelection(base64)` to shield immediately (e.g. when block time is changed or the app relaunches while blocked). **CRITICAL — App selection flow:**
     1. During onboarding (step 7) and from the profile "Blocked Apps" page, the user selects apps via Apple's `FamilyActivityPicker` UI (presented by the `PresencePicker` native module). This is the ONLY way to obtain valid `ApplicationToken`s — creating `Application(bundleIdentifier:)` directly always returns `token = nil`.
     2. The picker returns a base64-encoded `FamilyActivitySelection`. Stored in `routineStore.familyActivitySelection`.
     3. When shielding, `shieldEngine.ts` calls `ScreenTimeModule.applyShieldFromSelection(base64)` which decodes the selection and sets `store.shield.applications = selection.applicationTokens` — targeting only the user-chosen apps.
     4. If no `familyActivitySelection` is stored (legacy users / first install), the engine falls back to `applyShield(bundleIds)` which internally falls back to `store.shield.applicationCategories = .all()` when tokens are nil.
     5. `ManagedSettingsStore` operations are silently no-ops if FamilyControls authorization is not `.approved`. Always check `getAuthorizationStatus()` before applying a shield and re-request if needed.
+  - **Shield overlay customisation (iOS):** The `PresenceShieldConfiguration` App Extension (`targets/PresenceShieldConfiguration/ShieldConfigurationExtension.swift`) overrides the default "App Restricted" text with a branded, friendly message: *"Time to connect."* and subtitle instructing the user to open Presence and share a screenshot. Managed by `@bacons/apple-targets` (type `"shield-config"`). The primary button label is "Open Presence" — without an additional ShieldAction extension, the system default action (opening Screen Time settings) applies.
+  - **Screen Time auth re-request:** `lib/shieldEngine.ts` exports `ensureScreenTimeAuth()` which is called whenever the user saves a new block time (from `block-time.tsx` and `step-4-goal.tsx`). It checks the current FamilyControls auth status: if `notDetermined` (covers the case where the user revoked Screen Time in iOS Settings, which resets status to `notDetermined` on iOS 16+) it shows the native system prompt; if `denied` it shows a tappable toast that deep-links to `app-settings:`. Additionally, `checkAndUpdateShield()` now distinguishes between "near block time (≤ 20 min)" and "general" denied states, showing a more urgent toast with `visibilityTime: 10000` when the block window is imminent.
+  - **Block time scheduling — 20-minute minimum window:** When the user saves a block time in `block-time.tsx` or `step-4-goal.tsx`, a toast immediately informs them whether the shield starts today or tomorrow. If the chosen time is less than 20 minutes in the future (or already past for today), the toast warns: *"Less than 20 minutes away — your shield will start tomorrow at [time]"* (8 s, position top). Otherwise it confirms today's start (5 s). The schedule is still saved — the native `DeviceActivitySchedule` repeats daily so it correctly fires tomorrow.
   - **Android:** Implements a foreground service using `UsageStatsManager` to detect blocked apps, and uses `WindowManager` (`SYSTEM_ALERT_WINDOW`) to draw a custom React Native "Shield" screen over the blocked app.
 - **The Proof:** `expo-image-picker` passes the screenshot to the native modules.
   - **iOS:** Uses Apple `VNRecognizeTextRequest`.
@@ -251,6 +266,7 @@ These were discovered during development and must be respected:
 3. **Swift Files & React Imports:**
    - In the RCT_EXTERN_MODULE bridge pattern, React Native ObjC types are provided by the auto-generated bridging header.
    - HOWEVER, if you are explicitly using React Native types inside the Swift file itself (like RCTPromiseResolveBlock or RCTPromiseRejectBlock), you MUST add import React to the top of the Swift file.
+   - The `DeviceActivityMonitorExtension` in `targets/PresenceMonitor/` is an App Extension — it has **no** RN bridge and must **never** import React or use any RN types.
 
 4. **`@available(iOS X)` at Class Level Breaks ObjC Bridge:**
    - Do NOT put `@available(iOS 16.0, *)` on the class — only put `guard #available(iOS 16.0, *)` inside individual methods that need it.
@@ -278,6 +294,20 @@ These were discovered during development and must be respected:
 
 - Never instruct the user to "open Xcode" or "modify files in the ios/ folder."
 - You must act as if the ios/ and android/ folders are completely invisible. Every single native modification (adding files, tweaking Info.plist, editing AndroidManifest.xml) must be done exclusively via Expo Config Plugins inside the app.json plugins array.
+
+18. **`@bacons/apple-targets` — Extension Provisioning Profile:**
+   - `@bacons/apple-targets` generates a separate Xcode target for each `targets/*/expo-target.config.js`. Each target requires its own provisioning profile.
+   - The `PresenceMonitor` extension uses the same `com.apple.developer.family-controls` entitlement and `group.com.franciccio.presence` App Group as the main app — both must be enabled in the Apple Developer Portal for the **extension's** App ID (`com.franciccio.presence.PresenceMonitor`), not just the main app's ID.
+   - After adding or changing entitlements in `expo-target.config.js`, delete the cached EAS provisioning profiles (`eas credentials --platform ios`) and rebuild so EAS generates fresh profiles covering both the main app and the extension.
+   - To edit the extension: modify `targets/PresenceMonitor/DeviceActivityMonitorExtension.swift` directly. The `expo-target.config.js` controls target metadata (type, entitlements, deployment target) — edit it to change those. Never touch the generated `ios/` folder.
+
+19. **i18n Language Not Applied on Cold Start — Zustand Hydration Race (CRITICAL):**
+   - `userStore` persists `language` and `languageSetByUser` to AsyncStorage via Zustand `persist`. AsyncStorage reads are **asynchronous**, so the store has not finished loading by the time the first `useEffect` fires in `_layout.tsx`.
+   - A one-shot `useEffect(() => { ... }, [])` that reads `useUserStore.getState()` will see the in-memory initial defaults (`language: "en"`, `languageSetByUser: false`) instead of the persisted values. The language is never applied to i18n, and the app stays in whatever language `detectDeviceLanguage()` returned at module load — which may not match the user's stored preference.
+   - **The fix:** `userStore` uses the same `_hasHydrated` + `onRehydrateStorage` pattern as `authStore` and `onboardingStore`. The language `useEffect` in `_layout.tsx` depends on `userHydrated` so it only runs after AsyncStorage has finished loading:
+     - If `languageSetByUser: true` → `i18n.changeLanguage(language)` (explicit user choice wins).
+     - If `languageSetByUser: false` → sync `userStore.language` to i18n's device-detected language so the profile picker always shows the real active language without the user needing to manually select it.
+   - **Never** read `userStore` language state in a one-shot effect. Always gate on `_hasHydrated`.
 
 11. **Onboarding Back Navigation — Always Guard with `router.canGoBack()`:**
    - On cold start, `index.tsx` routes directly to the persisted `currentStep`, meaning no navigation history exists. Calling `router.back()` on a screen with an empty stack throws `'GO_BACK' was not handled by any navigator`.

@@ -226,6 +226,17 @@
     "version": "Versión {{version}}",
     "copyright": "© 2026 Presence. Todos los derechos reservados."
   },
+  "blockTime": {
+    "startsToday": "El escudo comienza hoy a las {{time}}.",
+    "startsTomorrow": "Atención — menos de 20 minutos. Tu escudo comenzará mañana a las {{time}}.",
+    "screenTimeOffTitle": "Tiempo de pantalla está desactivado",
+    "screenTimeOffBody": "Toca aquí para reactivarlo en Ajustes y que Presence pueda bloquear tus apps.",
+    "screenTimeNearTitle": "Tiempo de pantalla debe estar activado",
+    "screenTimeNearBody": "Tu hora de bloqueo está por llegar y Tiempo de pantalla está desactivado. Toca aquí para solucionarlo en Ajustes.",
+    "removeSchedule": "Eliminar horario",
+    "scheduleRemoved": "Horario eliminado.",
+    "skipForNow": "Omitir por ahora"
+  },
   "shield": {
     "title": "Reemplaza enviar memes con una conexión genuina. Escríbele a alguien, sube la captura y desbloquea tus apps.",
     "verifying": "Verificando tu conexión...",
