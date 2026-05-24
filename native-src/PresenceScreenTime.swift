@@ -2,13 +2,56 @@ import Foundation
 import FamilyControls
 import ManagedSettings
 import DeviceActivity
+import Combine
 import React // Required for RCTPromiseResolveBlock / RCTPromiseRejectBlock
 
 @objc(PresenceScreenTime)
-public class PresenceScreenTime: NSObject {
+public class PresenceScreenTime: RCTEventEmitter {
 
     private let store = ManagedSettingsStore()
     private let appGroup = "group.com.franciccio.presence"
+    private var cancellables = Set<AnyCancellable>()
+    private var hasListeners = false
+
+    // ── RCTEventEmitter ───────────────────────────────────────────────────────
+
+    @objc override public static func requiresMainQueueSetup() -> Bool { return false }
+
+    @objc override public func supportedEvents() -> [String]! {
+        return ["onScreenTimeAuthChanged"]
+    }
+
+    /// Called by RN when the first JS listener subscribes.
+    /// Starts the Combine subscription on AuthorizationCenter.$authorizationStatus
+    /// so we emit an event the moment the OS updates the status — fixing the
+    /// AppState-foreground race condition where the status was still stale.
+    @objc override public func startObserving() {
+        hasListeners = true
+        if #available(iOS 15.0, *) {
+            AuthorizationCenter.shared.$authorizationStatus
+                .dropFirst() // skip the current value; only react to changes
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] status in
+                    guard let self = self, self.hasListeners else { return }
+                    let s: String
+                    switch status {
+                    case .approved:      s = "approved"
+                    case .denied:        s = "denied"
+                    case .notDetermined: s = "notDetermined"
+                    @unknown default:    s = "unknown"
+                    }
+                    NSLog("[PresenceScreenTime] authorizationStatus changed → %@", s)
+                    self.sendEvent(withName: "onScreenTimeAuthChanged", body: ["status": s])
+                }
+                .store(in: &cancellables)
+        }
+    }
+
+    /// Called by RN when the last JS listener unsubscribes.
+    @objc override public func stopObserving() {
+        hasListeners = false
+        cancellables.removeAll()
+    }
 
     // ── Authorization ─────────────────────────────────────────────────────────
 

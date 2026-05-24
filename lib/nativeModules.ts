@@ -7,7 +7,7 @@
  * On web  → no-op stubs so Metro doesn't crash during `expo start --web`
  */
 
-import { NativeModules, Platform, DeviceEventEmitter } from "react-native";
+import { NativeModules, Platform, DeviceEventEmitter, NativeEventEmitter } from "react-native";
 
 // ── iOS ScreenTime ───────────────────────────────────────────────────────────
 
@@ -169,5 +169,24 @@ export const SHIELD_ACTIVATED_EVENT = "onShieldActivated";
 
 export function addShieldActivatedListener(callback: () => void) {
   const sub = DeviceEventEmitter.addListener(SHIELD_ACTIVATED_EVENT, callback);
+  return () => sub.remove();
+}
+
+// ── iOS Screen Time auth status change event ─────────────────────────────────
+// PresenceScreenTime (RCTEventEmitter) subscribes to AuthorizationCenter.$authorizationStatus
+// via Combine and emits this event when the OS updates the status (e.g. user
+// disables Screen Time in Settings). This is event-driven rather than polling,
+// so the status value is always current when the event fires.
+
+export type ScreenTimeAuthStatus = "approved" | "denied" | "notDetermined" | "unknown";
+
+export function addScreenTimeAuthChangedListener(
+  callback: (status: ScreenTimeAuthStatus) => void
+): () => void {
+  if (Platform.OS !== "ios" || !NativeModules.PresenceScreenTime) return () => {};
+  const emitter = new NativeEventEmitter(NativeModules.PresenceScreenTime);
+  const sub = emitter.addListener("onScreenTimeAuthChanged", (event: { status: string }) => {
+    callback(event.status as ScreenTimeAuthStatus);
+  });
   return () => sub.remove();
 }

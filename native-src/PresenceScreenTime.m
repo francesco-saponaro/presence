@@ -1,6 +1,7 @@
 #import <React/RCTBridgeModule.h>
+#import <React/RCTEventEmitter.h>
 
-@interface RCT_EXTERN_MODULE(PresenceScreenTime, NSObject)
+@interface RCT_EXTERN_MODULE(PresenceScreenTime, RCTEventEmitter)
 
 RCT_EXTERN_METHOD(requestAuthorization:(RCTPromiseResolveBlock)resolve
                   reject:(RCTPromiseRejectBlock)reject)

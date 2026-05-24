@@ -19,7 +19,7 @@ import { useShieldStore } from "@/store/shield";
 import { useRoutineStore } from "@/store/routine";
 import { useUserStore } from "@/store/userStore";
 import { isBlockTimeActive, getLocalBlockTime, msUntilNextBlock } from "./timezone";
-import { ScreenTimeModule, BlockerModule, addShieldActivatedListener } from "./nativeModules";
+import { ScreenTimeModule, BlockerModule, addShieldActivatedListener, addScreenTimeAuthChangedListener } from "./nativeModules";
 import { supabase } from "./supabase";
 import { scheduleInactivityNotification, cancelWarmupNotification } from "./notifications";
 
@@ -336,6 +336,25 @@ export function startShieldEngine(): () => void {
   };
   const appStateSub = AppState.addEventListener("change", handleAppState);
 
+  // iOS: observe FamilyControls auth status changes via Combine publisher.
+  // Fires event-driven when the OS updates authorizationStatus (e.g. user turns
+  // off Screen Time in Settings), so we always read a fresh value — no race
+  // condition with AppState foreground reading stale state.
+  let removeAuthListener = () => {};
+  if (Platform.OS === "ios") {
+    removeAuthListener = addScreenTimeAuthChangedListener(async (status) => {
+      console.log("[shieldEngine] FamilyControls auth changed:", status);
+      if (status === "notDetermined") {
+        // Screen Time was disabled in Settings — show the native permission dialog.
+        await ScreenTimeModule.requestAuthorization().catch((e: unknown) =>
+          console.warn("[shieldEngine] re-auth requestAuthorization failed:", JSON.stringify(e))
+        );
+      }
+      // Re-evaluate shield regardless of the new status.
+      checkAndUpdateShield().catch(console.warn);
+    });
+  }
+
   // Android: receive shield trigger from the background service
   let removeShieldListener = () => {};
   if (Platform.OS === "android") {
@@ -348,6 +367,7 @@ export function startShieldEngine(): () => void {
 
   return () => {
     appStateSub.remove();
+    removeAuthListener();
     removeShieldListener();
   };
 }
