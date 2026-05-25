@@ -1,6 +1,5 @@
 import ManagedSettingsUI
 import ManagedSettings
-import DeviceActivity
 import UIKit
 
 /**
@@ -25,7 +24,7 @@ class ShieldConfigurationExtension: ShieldConfigurationDataSource {
 
     override func configuration(
         shielding application: Application,
-        in context: DeviceActivityEvent.Name
+        in category: ActivityCategory
     ) -> ShieldConfiguration {
         presenceConfiguration()
     }
@@ -36,7 +35,7 @@ class ShieldConfigurationExtension: ShieldConfigurationDataSource {
 
     override func configuration(
         shielding webDomain: WebDomain,
-        in context: DeviceActivityEvent.Name
+        in category: ActivityCategory
     ) -> ShieldConfiguration {
         presenceConfiguration()
     }
