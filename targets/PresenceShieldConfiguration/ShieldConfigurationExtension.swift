@@ -1,5 +1,7 @@
 import ManagedSettingsUI
 import ManagedSettings
+import DeviceActivity
+import UIKit
 
 /**
  * PresenceShieldConfiguration — ShieldConfigurationDataSource app extension
