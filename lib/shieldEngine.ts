@@ -175,32 +175,33 @@ export async function checkAndUpdateShield(): Promise<void> {
     return;
   }
 
-  // iOS: always check FamilyControls auth on foreground so we respond immediately
-  // when the user toggles Screen Time in Settings.
+  // iOS: re-check FamilyControls auth so we re-prompt when the user has turned
+  // Screen Time off for Presence (status → notDetermined).
+  //
+  // CRITICAL: do NOT gate this on getAuthorizationStatus(). That property is a
+  // cached value that does NOT refresh on a warm resume — when the user toggles
+  // Screen Time off in Settings while Presence is only suspended (not killed),
+  // the cached status stays "approved" and its Combine publisher never re-emits.
+  // requestAuthorization() instead performs a LIVE check against the system: it
+  // presents the native modal when the real state is notDetermined, and throws
+  // (silently, no UI) when already approved or denied. That makes it the only
+  // reliable re-prompt trigger across both cold start and warm resume.
   if (Platform.OS === "ios") {
     try {
-      const authStatus = await ScreenTimeModule.getAuthorizationStatus();
-      console.log("[shieldEngine] auth status on check:", authStatus);
-
-      if (authStatus === "denied") {
-        // Screen Time was revoked for Presence in Settings (status → denied).
-        // iOS forbids requestAuthorization() from re-showing the native modal
-        // once denied — the user must re-enable it manually. Show a prominent
-        // alert that deep-links to Settings.
-        alertScreenTimeRevoked();
-        return; // nothing more we can do until the user re-enables Screen Time
-      } else if (authStatus === "notDetermined") {
-        // Never authorised (fresh install or reset), OR the user revoked Screen Time
-        // in Settings (which returns the status to notDetermined on iOS 16+).
-        // Show the native FamilyControls system prompt.
-        console.log("[shieldEngine] auth notDetermined, requesting...");
-        await ScreenTimeModule.requestAuthorization().catch((e: unknown) =>
-          console.warn("[shieldEngine] requestAuthorization failed:", JSON.stringify(e))
-        );
-      }
-      // "approved" → nothing to do, proceed normally
+      await ScreenTimeModule.requestAuthorization();
+      // Resolved → authorized (freshly granted via the modal, or already approved).
     } catch {
-      // getAuthorizationStatus unavailable (simulator / old build) — ignore
+      // Threw → already approved (iOS 16+ throws on re-request) OR denied. The
+      // live requestAuthorization call refreshes the cached status, so read it
+      // now: only a genuine "denied" (user tapped "Don't Allow") needs the
+      // Settings alert, since denied cannot be re-prompted with the native modal.
+      const status = await ScreenTimeModule.getAuthorizationStatus().catch(() => "approved");
+      console.log("[shieldEngine] auth status after requestAuthorization threw:", status);
+      if (status === "denied") {
+        alertScreenTimeRevoked();
+        return; // nothing more we can do until the user re-enables in Settings
+      }
+      // "approved" → proceed normally
     }
   }
 
@@ -316,7 +317,21 @@ export async function syncPendingConnections(): Promise<void> {
  */
 export function startShieldEngine(): () => void {
   _screenTimeAlertShown = false; // reset per app session
-  checkAndUpdateShield().catch(console.warn);
+
+  // Run the first schedule/auth check only once the routine store has hydrated
+  // from AsyncStorage. On a cold start — which is exactly what happens after the
+  // user toggles Presence's Screen Time off in iOS Settings, since iOS kills the
+  // app — the persisted routine is NOT readable synchronously. A premature check
+  // sees blockTimeUtc=null, bails at the routineReady guard, and never reaches
+  // the Screen Time auth check, so the revoked-permission alert never fires.
+  let removeHydrationListener = () => {};
+  if (useRoutineStore.persist.hasHydrated()) {
+    checkAndUpdateShield().catch(console.warn);
+  } else {
+    removeHydrationListener = useRoutineStore.persist.onFinishHydration(() => {
+      checkAndUpdateShield().catch(console.warn);
+    });
+  }
   syncPendingConnections().catch(console.warn);
 
   // AppState: foreground re-check (anti-cheat)
@@ -335,15 +350,10 @@ export function startShieldEngine(): () => void {
   // condition with AppState foreground reading stale state.
   let removeAuthListener = () => {};
   if (Platform.OS === "ios") {
-    removeAuthListener = addScreenTimeAuthChangedListener(async (status) => {
+    removeAuthListener = addScreenTimeAuthChangedListener((status) => {
       console.log("[shieldEngine] FamilyControls auth changed:", status);
-      if (status === "notDetermined") {
-        // Screen Time was disabled in Settings — show the native permission dialog.
-        await ScreenTimeModule.requestAuthorization().catch((e: unknown) =>
-          console.warn("[shieldEngine] re-auth requestAuthorization failed:", JSON.stringify(e))
-        );
-      }
-      // Re-evaluate shield regardless of the new status.
+      // checkAndUpdateShield() now performs the live requestAuthorization()
+      // re-prompt itself, so just re-evaluate — avoids a double prompt.
       checkAndUpdateShield().catch(console.warn);
     });
   }
@@ -359,6 +369,7 @@ export function startShieldEngine(): () => void {
   }
 
   return () => {
+    removeHydrationListener();
     appStateSub.remove();
     removeAuthListener();
     removeShieldListener();
