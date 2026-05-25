@@ -233,6 +233,9 @@
     "screenTimeOffBody": "Appuyez ici pour le réactiver dans Réglages afin que Presence puisse bloquer vos apps.",
     "screenTimeNearTitle": "Temps d'écran doit être activé",
     "screenTimeNearBody": "Votre heure de blocage approche et Temps d'écran est désactivé. Appuyez ici pour le corriger dans Réglages.",
+    "screenTimeOffAlertBody": "Presence ne peut pas verrouiller vos applis tant que Temps d'écran n'est pas réactivé. Ouvrez Réglages et réactivez-le pour rester protégé.",
+    "openSettings": "Ouvrir Réglages",
+    "notNow": "Plus tard",
     "removeSchedule": "Supprimer le planning",
     "scheduleRemoved": "Planning supprimé.",
     "skipForNow": "Passer pour l'instant"

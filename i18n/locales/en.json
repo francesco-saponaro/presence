@@ -233,6 +233,9 @@
     "screenTimeOffBody": "Tap here to re-enable it in Settings so Presence can lock your apps at the scheduled time.",
     "screenTimeNearTitle": "Screen Time needs to be on",
     "screenTimeNearBody": "Your block time is almost here and Screen Time is disabled. Tap here to fix it in Settings.",
+    "screenTimeOffAlertBody": "Presence can't lock your apps until Screen Time is back on. Open Settings and re-enable it to stay protected.",
+    "openSettings": "Open Settings",
+    "notNow": "Not now",
     "removeSchedule": "Remove schedule",
     "scheduleRemoved": "Schedule removed.",
     "skipForNow": "Skip for now"

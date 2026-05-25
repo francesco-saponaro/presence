@@ -233,6 +233,9 @@
     "screenTimeOffBody": "Tocca qui per riattivarlo nelle Impostazioni in modo che Presence possa bloccare le tue app.",
     "screenTimeNearTitle": "Il tempo di utilizzo deve essere attivo",
     "screenTimeNearBody": "Il tuo orario di blocco è quasi arrivato e Tempo di utilizzo è disattivato. Tocca qui per risolvere nelle Impostazioni.",
+    "screenTimeOffAlertBody": "Presence non può bloccare le tue app finché Tempo di utilizzo non è riattivato. Apri le Impostazioni e riattivalo per restare protetto.",
+    "openSettings": "Apri Impostazioni",
+    "notNow": "Non ora",
     "removeSchedule": "Rimuovi orario",
     "scheduleRemoved": "Orario rimosso.",
     "skipForNow": "Salta per ora"

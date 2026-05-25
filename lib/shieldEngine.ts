@@ -12,22 +12,44 @@
  * Call startShieldEngine() once from the root layout.
  */
 
-import { AppState, AppStateStatus, Linking, Platform } from "react-native";
-import Toast from "react-native-toast-message";
+import { Alert, AppState, AppStateStatus, Linking, Platform } from "react-native";
 import i18n from "@/i18n";
 import { useShieldStore } from "@/store/shield";
 import { useRoutineStore } from "@/store/routine";
 import { useUserStore } from "@/store/userStore";
-import { isBlockTimeActive, getLocalBlockTime, msUntilNextBlock } from "./timezone";
+import { isBlockTimeActive, getLocalBlockTime } from "./timezone";
 import { ScreenTimeModule, BlockerModule, addShieldActivatedListener, addScreenTimeAuthChangedListener } from "./nativeModules";
 import { supabase } from "./supabase";
 import { scheduleInactivityNotification, cancelWarmupNotification } from "./notifications";
 
-// Throttle the "Screen Time disabled" toast to once per app session.
-let _screenTimeWarningShown = false;
-// Throttle the near-block-time Screen Time prompt separately so it fires
-// once per session when entering the 20-minute approach window.
-let _screenTimeNearBlockShown = false;
+// Throttle the "Screen Time revoked" alert to once per app session.
+let _screenTimeAlertShown = false;
+
+/**
+ * Show a prominent alert when Screen Time has been revoked for Presence
+ * (authorization status "denied"). iOS forbids re-showing the native
+ * FamilyControls modal once denied (same privacy rule as Camera / Photos), so
+ * deep-linking the user to Settings is the only way back. Throttled to once
+ * per app session unless `force` is set (e.g. when the user actively saves a
+ * schedule and we want immediate feedback).
+ */
+function alertScreenTimeRevoked(force = false): void {
+  if (!force && _screenTimeAlertShown) return;
+  _screenTimeAlertShown = true;
+  Alert.alert(
+    i18n.t("blockTime.screenTimeOffTitle"),
+    i18n.t("blockTime.screenTimeOffAlertBody"),
+    [
+      { text: i18n.t("blockTime.notNow"), style: "cancel" },
+      {
+        text: i18n.t("blockTime.openSettings"),
+        onPress: () => {
+          Linking.openURL("app-settings:");
+        },
+      },
+    ]
+  );
+}
 
 // ── Screen Time auth helpers ─────────────────────────────────────────────────
 
@@ -43,13 +65,8 @@ export async function ensureScreenTimeAuth(): Promise<void> {
     if (status === "approved") return;
 
     if (status === "denied") {
-      Toast.show({
-        type: "error",
-        text1: i18n.t("blockTime.screenTimeOffTitle"),
-        text2: i18n.t("blockTime.screenTimeOffBody"),
-        visibilityTime: 8000,
-        onPress: () => Linking.openURL("app-settings:"),
-      });
+      // Screen Time was revoked in Settings — iOS won't re-show the native modal.
+      alertScreenTimeRevoked(true);
       return;
     }
 
@@ -166,35 +183,12 @@ export async function checkAndUpdateShield(): Promise<void> {
       console.log("[shieldEngine] auth status on check:", authStatus);
 
       if (authStatus === "denied") {
-        // Screen Time was disabled in Settings. iOS does not allow
-        // requestAuthorization() to re-prompt — the user must re-enable manually.
-        const { blockTimeUtc } = useRoutineStore.getState();
-        const minutesUntilBlock = blockTimeUtc
-          ? msUntilNextBlock(blockTimeUtc) / 60_000
-          : Infinity;
-        const isNearBlockTime = minutesUntilBlock <= 20;
-
-        if (isNearBlockTime && !_screenTimeNearBlockShown) {
-          // Approaching block time: show urgent tappable toast directing to Settings.
-          _screenTimeNearBlockShown = true;
-          Toast.show({
-            type: "error",
-            text1: i18n.t("blockTime.screenTimeNearTitle"),
-            text2: i18n.t("blockTime.screenTimeNearBody"),
-            visibilityTime: 10000,
-            onPress: () => Linking.openURL("app-settings:"),
-          });
-        } else if (!isNearBlockTime && !_screenTimeWarningShown) {
-          _screenTimeWarningShown = true;
-          Toast.show({
-            type: "error",
-            text1: i18n.t("blockTime.screenTimeOffTitle"),
-            text2: i18n.t("blockTime.screenTimeOffBody"),
-            visibilityTime: 6000,
-            onPress: () => Linking.openURL("app-settings:"),
-          });
-        }
-        return; // nothing more we can do until user re-enables Screen Time
+        // Screen Time was revoked for Presence in Settings (status → denied).
+        // iOS forbids requestAuthorization() from re-showing the native modal
+        // once denied — the user must re-enable it manually. Show a prominent
+        // alert that deep-links to Settings.
+        alertScreenTimeRevoked();
+        return; // nothing more we can do until the user re-enables Screen Time
       } else if (authStatus === "notDetermined") {
         // Never authorised (fresh install or reset), OR the user revoked Screen Time
         // in Settings (which returns the status to notDetermined on iOS 16+).
@@ -321,8 +315,7 @@ export async function syncPendingConnections(): Promise<void> {
  *   4. Opportunistic sync of any pending offline connections.
  */
 export function startShieldEngine(): () => void {
-  _screenTimeWarningShown = false;   // reset per app session
-  _screenTimeNearBlockShown = false; // reset per app session
+  _screenTimeAlertShown = false; // reset per app session
   checkAndUpdateShield().catch(console.warn);
   syncPendingConnections().catch(console.warn);
 
