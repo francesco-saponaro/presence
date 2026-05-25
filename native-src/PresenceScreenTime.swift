@@ -30,6 +30,8 @@ public class PresenceScreenTime: RCTEventEmitter {
         if #available(iOS 15.0, *) {
             AuthorizationCenter.shared.$authorizationStatus
                 .dropFirst() // skip the current value; only react to changes
+                .removeDuplicates() // only emit on a REAL status change — breaks the
+                                    // requestAuthorization()→re-publish→checkAndUpdateShield feedback loop
                 .receive(on: DispatchQueue.main)
                 .sink { [weak self] status in
                     guard let self = self, self.hasListeners else { return }
