@@ -14,7 +14,7 @@ import type { BottomSheetBackdropProps } from "@gorhom/bottom-sheet";
 import { useRoutineStore } from "@/store/routine";
 import { getLocalBlockTime } from "@/lib/timezone";
 import { syncRoutineToSupabase } from "@/lib/routineSync";
-import { ensureScreenTimeAuth, deactivateSchedule } from "@/lib/shieldEngine";
+import { checkAndUpdateShield, deactivateSchedule } from "@/lib/shieldEngine";
 import { PillButton } from "@/components/ui/PillButton";
 import Toast from "react-native-toast-message";
 
@@ -56,6 +56,13 @@ export default function BlockTimeScreen() {
   const [frequency, setFrequencyLocal] = useState<Frequency>(
     (storedFrequency as Frequency) ?? "daily"
   );
+
+  // When no schedule exists yet, show a friendly empty state with a single
+  // "Set a schedule" button instead of the time picker. Tapping it reveals the
+  // timer layout. An existing schedule always shows the timer layout directly.
+  const hasSchedule = !!blockTimeUtc;
+  const [isSettingUp, setIsSettingUp] = useState(false);
+  const showTimer = hasSchedule || isSettingUp;
 
   const renderBackdrop = useCallback(
     (props: BottomSheetBackdropProps) => (
@@ -100,8 +107,12 @@ export default function BlockTimeScreen() {
     syncRoutineToSupabase().catch(() => {});
     scheduleStartToast(selectedTime);
     router.back();
-    // Fire-and-forget: re-prompt for Screen Time auth if needed (iOS only)
-    ensureScreenTimeAuth().catch(console.warn);
+    // Re-evaluate the shield immediately so the homepage status and the native
+    // shield update right away — e.g. moving the block time into the future
+    // while currently blocked lifts the shield without waiting for a foreground
+    // event or a manual refresh. checkAndUpdateShield() also performs the live
+    // Screen Time auth re-prompt (replacing the old ensureScreenTimeAuth call).
+    checkAndUpdateShield().catch(console.warn);
   }
 
   return (
@@ -118,71 +129,100 @@ export default function BlockTimeScreen() {
       <View className="h-px bg-greige/30 dark:bg-brown-mid/20 mx-6 mb-2" />
 
       <View className="flex-1 px-6 justify-center">
-        <Text className="font-sans-body text-sm text-greige text-center mb-10">
-          {t("onboarding.step4.subtitle")}
-        </Text>
+        {showTimer ? (
+          <>
+            <Text className="font-sans-body text-sm text-greige text-center mb-10">
+              {t("onboarding.step4.subtitle")}
+            </Text>
 
-        {/* Time card */}
-        <TouchableOpacity
-          onPress={() => {
-            setPendingTime(selectedTime);
-            sheetRef.current?.present();
-          }}
-          activeOpacity={0.8}
-          className="self-center mb-10"
-        >
-          <View
-            className="bg-surface-light dark:bg-surface-dark rounded-3xl px-10 py-6 items-center border border-greige dark:border-brown-mid"
-            style={{
-              shadowColor: "#422701",
-              shadowOffset: { width: 0, height: 6 },
-              shadowOpacity: 0.08,
-              shadowRadius: 16,
-              elevation: 4,
-            }}
-          >
-            <Text className="font-serif-display text-6xl text-brown-dark dark:text-tan tracking-tight">
-              {formatTime(selectedTime)}
+            {/* Time card */}
+            <TouchableOpacity
+              onPress={() => {
+                setPendingTime(selectedTime);
+                sheetRef.current?.present();
+              }}
+              activeOpacity={0.8}
+              className="self-center mb-10"
+            >
+              <View
+                className="bg-surface-light dark:bg-surface-dark rounded-3xl px-10 py-6 items-center border border-greige dark:border-brown-mid"
+                style={{
+                  shadowColor: "#422701",
+                  shadowOffset: { width: 0, height: 6 },
+                  shadowOpacity: 0.08,
+                  shadowRadius: 16,
+                  elevation: 4,
+                }}
+              >
+                <Text className="font-serif-display text-6xl text-brown-dark dark:text-tan tracking-tight">
+                  {formatTime(selectedTime)}
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Frequency */}
+            <Text className="font-sans-medium text-sm text-brown-mid dark:text-greige text-center mb-4">
+              {t("onboarding.step4.frequencyLabel")}
+            </Text>
+            <View className="gap-3">
+              {FREQ_KEYS.map(({ key, i18n }) => (
+                <PillButton
+                  key={key}
+                  label={t(i18n)}
+                  variant="outline"
+                  selected={frequency === key}
+                  onPress={() => setFrequencyLocal(key)}
+                />
+              ))}
+            </View>
+          </>
+        ) : (
+          /* Empty state — no schedule set yet */
+          <View className="items-center">
+            <View className="w-20 h-20 rounded-full bg-surface-light dark:bg-surface-dark items-center justify-center mb-8 border border-greige dark:border-brown-mid">
+              <Ionicons name="alarm-outline" size={38} color="#705E46" />
+            </View>
+            <Text className="font-serif-display text-2xl text-text-dark dark:text-text-light text-center mb-3">
+              {t("blockTime.noScheduleTitle")}
+            </Text>
+            <Text className="font-sans-body text-sm text-greige text-center leading-5">
+              {t("blockTime.noScheduleBody")}
             </Text>
           </View>
-        </TouchableOpacity>
-
-        {/* Frequency */}
-        <Text className="font-sans-medium text-sm text-brown-mid dark:text-greige text-center mb-4">
-          {t("onboarding.step4.frequencyLabel")}
-        </Text>
-        <View className="gap-3">
-          {FREQ_KEYS.map(({ key, i18n }) => (
-            <PillButton
-              key={key}
-              label={t(i18n)}
-              variant="outline"
-              selected={frequency === key}
-              onPress={() => setFrequencyLocal(key)}
-            />
-          ))}
-        </View>
+        )}
       </View>
 
-      {/* Save + Remove */}
+      {/* Footer */}
       <View
         className="px-6 pt-4 border-t border-surface-light dark:border-surface-dark"
         style={{ paddingBottom: Math.max(insets.bottom, 24) }}
       >
-        <PillButton label={t("common.save")} variant="primary" onPress={handleSave} />
-        <TouchableOpacity
-          onPress={async () => {
-            await deactivateSchedule();
-            Toast.show({ type: "success", text1: t("blockTime.scheduleRemoved") });
-            router.back();
-          }}
-          activeOpacity={0.6}
-          className="mt-4 items-center py-2"
-        >
-          <Text className="font-sans-body text-sm text-greige dark:text-greige">
-            {t("blockTime.removeSchedule")}
-          </Text>
-        </TouchableOpacity>
+        {showTimer ? (
+          <>
+            <PillButton label={t("common.save")} variant="primary" onPress={handleSave} />
+            {hasSchedule && (
+              <TouchableOpacity
+                onPress={async () => {
+                  await deactivateSchedule();
+                  Toast.show({ type: "success", text1: t("blockTime.scheduleRemoved") });
+                  router.back();
+                }}
+                activeOpacity={0.6}
+                className="mt-4 items-center py-2"
+              >
+                <Text className="font-sans-body text-sm text-greige dark:text-greige">
+                  {t("blockTime.removeSchedule")}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </>
+        ) : (
+          <PillButton
+            label={t("blockTime.setSchedule")}
+            variant="primary"
+            onPress={() => setIsSettingUp(true)}
+          />
+        )}
       </View>
 
       {/* Time picker sheet */}

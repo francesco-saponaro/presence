@@ -236,6 +236,9 @@
     "screenTimeOffAlertBody": "Presence no puede bloquear tus apps hasta que Tiempo de pantalla esté activado de nuevo. Abre Ajustes y vuelve a activarlo para seguir protegido.",
     "openSettings": "Abrir Ajustes",
     "notNow": "Ahora no",
+    "noScheduleTitle": "Aún no hay horario",
+    "noScheduleBody": "Elige una hora y tus apps seleccionadas se bloquearán hasta que contactes a alguien real.",
+    "setSchedule": "Establecer un horario",
     "removeSchedule": "Eliminar horario",
     "scheduleRemoved": "Horario eliminado.",
     "skipForNow": "Omitir por ahora"

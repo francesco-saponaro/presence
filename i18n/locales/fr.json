@@ -236,6 +236,9 @@
     "screenTimeOffAlertBody": "Presence ne peut pas verrouiller vos applis tant que Temps d'écran n'est pas réactivé. Ouvrez Réglages et réactivez-le pour rester protégé.",
     "openSettings": "Ouvrir Réglages",
     "notNow": "Plus tard",
+    "noScheduleTitle": "Aucun horaire défini",
+    "noScheduleBody": "Choisissez une heure et vos applis sélectionnées se verrouilleront jusqu'à ce que vous contactiez quelqu'un de réel.",
+    "setSchedule": "Définir un horaire",
     "removeSchedule": "Supprimer le planning",
     "scheduleRemoved": "Planning supprimé.",
     "skipForNow": "Passer pour l'instant"

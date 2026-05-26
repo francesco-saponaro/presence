@@ -236,6 +236,9 @@
     "screenTimeOffAlertBody": "Presence non può bloccare le tue app finché Tempo di utilizzo non è riattivato. Apri le Impostazioni e riattivalo per restare protetto.",
     "openSettings": "Apri Impostazioni",
     "notNow": "Non ora",
+    "noScheduleTitle": "Nessun orario impostato",
+    "noScheduleBody": "Scegli un orario e le app selezionate si bloccheranno finché non contatti qualcuno di reale.",
+    "setSchedule": "Imposta un orario",
     "removeSchedule": "Rimuovi orario",
     "scheduleRemoved": "Orario rimosso.",
     "skipForNow": "Salta per ora"

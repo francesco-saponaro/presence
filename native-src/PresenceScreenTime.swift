@@ -224,10 +224,14 @@ public class PresenceScreenTime: RCTEventEmitter {
      The schedule repeats daily; the extension filters by day-of-week using
      the `frequency` value stored in the shared UserDefaults.
 
-     The block window is 23 hours (blockTime → blockTime+23h), giving the user
-     the full next-day morning to verify. The main app calls clearShield() on
-     successful verification, which takes effect immediately regardless of the
-     DeviceActivity schedule still running.
+     The block window runs from blockTime to the END OF THE SAME DAY (23:59),
+     matching isBlockTimeActive() in JS (shield active from blockTime to midnight).
+     It must NOT wrap past midnight: DeviceActivity fires intervalDidStart
+     immediately when a schedule is registered while "now" already falls inside
+     the active interval, so a wrap-around (blockTime+23h) window blocks apps the
+     moment an evening schedule is set in the morning. The main app calls
+     clearShield() on successful verification, which takes effect immediately
+     regardless of the schedule still running.
      */
     @objc
     public func scheduleMonitoring(_ selectionBase64: String,
@@ -253,15 +257,18 @@ public class PresenceScreenTime: RCTEventEmitter {
 
         let hour = Int(localHour)
         let minute = Int(localMinute)
-        let endHour = (hour + 23) % 24  // 23-hour block window
 
         var startComponents = DateComponents()
         startComponents.hour = hour
         startComponents.minute = minute
 
+        // End at the end of the same calendar day (23:59), NOT blockTime+23h.
+        // A wrap-around window makes DeviceActivity treat an early-morning "now"
+        // as already inside the interval, firing intervalDidStart immediately and
+        // blocking apps before the chosen time. 23:59 matches isBlockTimeActive().
         var endComponents = DateComponents()
-        endComponents.hour = endHour
-        endComponents.minute = minute
+        endComponents.hour = 23
+        endComponents.minute = 59
 
         let schedule = DeviceActivitySchedule(
             intervalStart: startComponents,
@@ -274,7 +281,7 @@ public class PresenceScreenTime: RCTEventEmitter {
             // stopMonitoring first so re-configuring the schedule works cleanly
             center.stopMonitoring([DeviceActivityName("presence.blockTime")])
             try center.startMonitoring(DeviceActivityName("presence.blockTime"), during: schedule)
-            NSLog("[PresenceScreenTime] scheduleMonitoring: block at %02d:%02d, window=23h, freq=%@",
+            NSLog("[PresenceScreenTime] scheduleMonitoring: block %02d:%02d → 23:59, freq=%@",
                   hour, minute, frequency)
             resolve(nil)
         } catch {

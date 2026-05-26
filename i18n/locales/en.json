@@ -236,6 +236,9 @@
     "screenTimeOffAlertBody": "Presence can't lock your apps until Screen Time is back on. Open Settings and re-enable it to stay protected.",
     "openSettings": "Open Settings",
     "notNow": "Not now",
+    "noScheduleTitle": "No schedule yet",
+    "noScheduleBody": "Choose a time and your selected apps will lock until you reach out to someone real.",
+    "setSchedule": "Set a schedule",
     "removeSchedule": "Remove schedule",
     "scheduleRemoved": "Schedule removed.",
     "skipForNow": "Skip for now"
