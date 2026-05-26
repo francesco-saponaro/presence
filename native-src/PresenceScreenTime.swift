@@ -238,6 +238,7 @@ public class PresenceScreenTime: RCTEventEmitter {
                                     localHour: Double,
                                     localMinute: Double,
                                     frequency: String,
+                                    scheduleSetAtMs: Double,
                                     resolve: @escaping RCTPromiseResolveBlock,
                                     reject: @escaping RCTPromiseRejectBlock) {
         guard #available(iOS 16.0, *) else {
@@ -246,17 +247,22 @@ public class PresenceScreenTime: RCTEventEmitter {
             return
         }
 
-        // Write shared data for the extension to read
+        let hour = Int(localHour)
+        let minute = Int(localMinute)
+
+        // Write shared data for the extension to read. blockHour/blockMinute +
+        // scheduleSetAt let the extension compute the same block "baseline" as
+        // the JS engine, so it only applies the shield for a genuine trigger.
         if let defaults = UserDefaults(suiteName: appGroup) {
             if !selectionBase64.isEmpty {
                 defaults.set(selectionBase64, forKey: "familyActivitySelection")
             }
             defaults.set(frequency, forKey: "blockFrequency")
+            defaults.set(hour, forKey: "blockHour")
+            defaults.set(minute, forKey: "blockMinute")
+            defaults.set(scheduleSetAtMs, forKey: "scheduleSetAt")
             defaults.synchronize()
         }
-
-        let hour = Int(localHour)
-        let minute = Int(localMinute)
 
         var startComponents = DateComponents()
         startComponents.hour = hour
@@ -302,6 +308,22 @@ public class PresenceScreenTime: RCTEventEmitter {
         }
         DeviceActivityCenter().stopMonitoring()
         NSLog("[PresenceScreenTime] stopMonitoring: all activities stopped")
+        resolve(nil)
+    }
+
+    /**
+     Records the last verified-connection time (epoch ms) into the shared App
+     Group. The DeviceActivityMonitor extension reads this as part of the block
+     "baseline" so it does NOT re-apply the shield after the user has connected.
+     */
+    @objc
+    public func recordLastConnection(_ epochMs: Double,
+                                     resolve: @escaping RCTPromiseResolveBlock,
+                                     reject: @escaping RCTPromiseRejectBlock) {
+        if let defaults = UserDefaults(suiteName: appGroup) {
+            defaults.set(epochMs, forKey: "lastConnectionAt")
+            defaults.synchronize()
+        }
         resolve(nil)
     }
 }

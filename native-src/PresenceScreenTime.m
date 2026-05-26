@@ -24,10 +24,15 @@ RCT_EXTERN_METHOD(scheduleMonitoring:(NSString *)selectionBase64
                   localHour:(double)localHour
                   localMinute:(double)localMinute
                   frequency:(NSString *)frequency
+                  scheduleSetAtMs:(double)scheduleSetAtMs
                   resolve:(RCTPromiseResolveBlock)resolve
                   reject:(RCTPromiseRejectBlock)reject)
 
 RCT_EXTERN_METHOD(stopMonitoring:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(recordLastConnection:(double)epochMs
+                  resolve:(RCTPromiseResolveBlock)resolve
                   reject:(RCTPromiseRejectBlock)reject)
 
 @end

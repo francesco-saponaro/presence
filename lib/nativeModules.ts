@@ -21,17 +21,23 @@ interface ScreenTimeModuleType {
   clearShield(): Promise<void>;
   /**
    * Schedules the DeviceActivityMonitor extension to block apps at the given
-   * LOCAL time every day (extension filters weekdays/weekends internally).
+   * LOCAL time every day. The extension decides whether to apply the shield by
+   * comparing the most recent trigger against the baseline (scheduleSetAtMs +
+   * lastConnectionAt), so it persists overnight until a verified connection.
    * Must be called whenever the routine is saved or updated.
    */
   scheduleMonitoring(
     selectionBase64: string,
     localHour: number,
     localMinute: number,
-    frequency: string
+    frequency: string,
+    scheduleSetAtMs: number
   ): Promise<void>;
   /** Stops all DeviceActivity monitoring (call when routine is disabled). */
   stopMonitoring(): Promise<void>;
+  /** Writes the last verified-connection time (epoch ms) to the shared App Group
+   *  so the DeviceActivityMonitor extension won't re-block after a connection. */
+  recordLastConnection(epochMs: number): Promise<void>;
 }
 
 function buildScreenTimeStub(): ScreenTimeModuleType {
@@ -45,6 +51,7 @@ function buildScreenTimeStub(): ScreenTimeModuleType {
     clearShield: w,
     scheduleMonitoring: () => Promise.resolve(),
     stopMonitoring: () => Promise.resolve(),
+    recordLastConnection: () => Promise.resolve(),
   };
 }
 

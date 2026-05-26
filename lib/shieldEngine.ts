@@ -153,8 +153,9 @@ async function deactivateNativeShield(): Promise<void> {
  * and the current local time. Update Zustand + native layer accordingly.
  */
 export async function checkAndUpdateShield(): Promise<void> {
-  const { blockTimeUtc, frequency, blockedApps } = useRoutineStore.getState();
-  const { isBlocked, setBlocked } = useShieldStore.getState();
+  const { blockTimeUtc, frequency, blockedApps, scheduleSetAt, setScheduleSetAt } =
+    useRoutineStore.getState();
+  const { isBlocked, setBlocked, lastConnectionAt } = useShieldStore.getState();
 
   console.log("[shieldEngine] checkAndUpdateShield:", { blockTimeUtc, frequency, blockedApps, isBlocked });
 
@@ -174,6 +175,20 @@ export async function checkAndUpdateShield(): Promise<void> {
     }
     return;
   }
+
+  // Block "baseline": a trigger only blocks if it happened after the later of
+  // (schedule last (re)configured, last verified connection). Legacy migration:
+  // if scheduleSetAt is missing (existing users), initialise it to now so a past
+  // block time doesn't retroactively block them on first run after the update.
+  let scheduleBaseline = scheduleSetAt;
+  if (!scheduleBaseline) {
+    scheduleBaseline = new Date().toISOString();
+    setScheduleSetAt(scheduleBaseline);
+  }
+  const baselineMs = Math.max(
+    new Date(scheduleBaseline).getTime(),
+    lastConnectionAt ? new Date(lastConnectionAt).getTime() : 0
+  );
 
   // iOS: re-check FamilyControls auth so we re-prompt when the user has turned
   // Screen Time off for Presence (status → notDetermined).
@@ -214,13 +229,14 @@ export async function checkAndUpdateShield(): Promise<void> {
       familyActivitySelection ?? "",
       hour,
       minute,
-      frequency
+      frequency,
+      new Date(scheduleBaseline).getTime()
     ).catch((e: unknown) =>
       console.warn("[shieldEngine] scheduleMonitoring failed:", JSON.stringify(e))
     );
   }
 
-  const shouldBlock = isBlockTimeActive(blockTimeUtc, frequency);
+  const shouldBlock = isBlockTimeActive(blockTimeUtc, frequency, baselineMs);
   console.log("[shieldEngine] shouldBlock:", shouldBlock);
 
   if (shouldBlock) {
@@ -247,7 +263,8 @@ export async function checkAndUpdateShield(): Promise<void> {
  * Lifts the shield, increments the lifetime counter, and queues a Supabase sync.
  */
 export async function onConnectionVerified(wasManualBypass = false): Promise<void> {
-  const { setBlocked, addPendingConnection, resetOcrFail } = useShieldStore.getState();
+  const { setBlocked, addPendingConnection, resetOcrFail, setLastConnectionAt } =
+    useShieldStore.getState();
   const { recordConnection } = useUserStore.getState();
 
   const timestamp = new Date().toISOString();
@@ -256,6 +273,14 @@ export async function onConnectionVerified(wasManualBypass = false): Promise<voi
   resetOcrFail();
   addPendingConnection(timestamp);
   recordConnection();
+
+  // Advance the block baseline so the current block is satisfied and won't
+  // re-trigger until the next scheduled time — both in JS and in the native
+  // App Group the DeviceActivityMonitor extension reads.
+  setLastConnectionAt(timestamp);
+  if (Platform.OS === "ios") {
+    ScreenTimeModule.recordLastConnection(new Date(timestamp).getTime()).catch(console.warn);
+  }
 
   await deactivateNativeShield();
 

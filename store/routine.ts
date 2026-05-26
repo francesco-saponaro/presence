@@ -13,12 +13,18 @@ interface RoutineState {
    *  When set, applyShieldFromSelection() is used instead of applyShield(). */
   familyActivitySelection: string | null;
   trustedContacts: string[]; // names of contacts the user commits to reaching out to
+  /** ISO timestamp of when the schedule was last (re)configured. Used as part of
+   *  the block "baseline": a block trigger before this moment does not count, so
+   *  changing the time/frequency never retroactively blocks. */
+  scheduleSetAt: string | null;
   setBlockTime: (utcIso: string) => void;
   setFrequency: (freq: RoutineState["frequency"]) => void;
   setBlockedApps: (apps: string[]) => void;
   setBlockedAppNames: (names: Record<string, string>) => void;
   setFamilyActivitySelection: (base64: string | null) => void;
   setTrustedContacts: (contacts: string[]) => void;
+  /** Set the schedule baseline timestamp (used for legacy migration when null). */
+  setScheduleSetAt: (iso: string) => void;
   clearSchedule: () => void;
 }
 
@@ -31,13 +37,17 @@ export const useRoutineStore = create<RoutineState>()(
       blockedAppNames: {},
       familyActivitySelection: null,
       trustedContacts: [],
-      setBlockTime: (utcIso) => set({ blockTimeUtc: utcIso }),
-      setFrequency: (frequency) => set({ frequency }),
+      scheduleSetAt: null,
+      // Setting the time or frequency (re)configures the schedule → reset the
+      // baseline so the change never blocks retroactively.
+      setBlockTime: (utcIso) => set({ blockTimeUtc: utcIso, scheduleSetAt: new Date().toISOString() }),
+      setFrequency: (frequency) => set({ frequency, scheduleSetAt: new Date().toISOString() }),
       setBlockedApps: (blockedApps) => set({ blockedApps }),
       setBlockedAppNames: (blockedAppNames) => set({ blockedAppNames }),
       setFamilyActivitySelection: (familyActivitySelection) => set({ familyActivitySelection }),
       setTrustedContacts: (trustedContacts) => set({ trustedContacts }),
-      clearSchedule: () => set({ blockTimeUtc: null, frequency: null }),
+      setScheduleSetAt: (scheduleSetAt) => set({ scheduleSetAt }),
+      clearSchedule: () => set({ blockTimeUtc: null, frequency: null, scheduleSetAt: null }),
     }),
     {
       name: "presence-routine",

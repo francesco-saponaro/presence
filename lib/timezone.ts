@@ -12,7 +12,9 @@
  * Usage example:
  *   User is UTC+1, picks 8:00 PM → date.setHours(20,0,0,0) → ISO = "...T19:00:00.000Z"
  *   getLocalBlockHour("...T19:00:00.000Z")   → 20  (date-fns getHours returns LOCAL time)
- *   isBlockTimeActive(blockTimeUtc, "daily") → true after 8 PM local
+ *   isBlockTimeActive(blockTimeUtc, "daily", baselineMs) → true once a block
+ *     trigger after baselineMs has passed, and stays true until the next
+ *     verified connection (overnight persistence).
  */
 
 import { parseISO, getHours, getMinutes } from "date-fns";
@@ -28,37 +30,62 @@ export function getLocalBlockTime(blockTimeUtc: string): LocalTime {
   return { hour: getHours(date), minute: getMinutes(date) };
 }
 
+type Frequency = "daily" | "5x" | "weekends";
+
+/** Is the given JS weekday (0=Sun … 6=Sat) an active blocking day for the frequency? */
+function isActiveDay(dayOfWeek: number, frequency: Frequency): boolean {
+  switch (frequency) {
+    case "daily":    return true;
+    case "5x":       return dayOfWeek >= 1 && dayOfWeek <= 5; // Mon–Fri
+    case "weekends": return dayOfWeek === 0 || dayOfWeek === 6;
+    default:         return false;
+  }
+}
+
 /**
- * Returns true if the shield should be active right now according to
- * the user's chosen routine (block time + frequency).
+ * Epoch-ms of the most recent block-time trigger at or before now, on an active
+ * day per `frequency`. Walks back up to 7 days (enough to cover the most recent
+ * active day for any frequency). Returns null if none.
  *
- * Shield is active from blockTime until midnight (end of calendar day).
+ * "Trigger" = a calendar day's blockTime occurrence (local hour:minute) that has
+ * already passed and falls on an active day.
+ */
+export function mostRecentTriggerMs(
+  blockTimeUtc: string,
+  frequency: Frequency | null
+): number | null {
+  if (!frequency) return null;
+  const { hour, minute } = getLocalBlockTime(blockTimeUtc);
+  const now = new Date();
+  for (let back = 0; back < 7; back++) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - back);
+    d.setHours(hour, minute, 0, 0);
+    if (d.getTime() > now.getTime()) continue; // occurrence still in the future (today, pre-block)
+    if (!isActiveDay(d.getDay(), frequency)) continue;
+    return d.getTime();
+  }
+  return null;
+}
+
+/**
+ * Returns true if the shield should be active right now.
+ *
+ * Overnight-persistence model: the user is blocked from the moment a block
+ * triggers until they complete a verified connection. A trigger counts only if
+ * it happened AFTER `baselineMs` — the later of when the schedule was last
+ * (re)configured and when the user last verified a connection. This means:
+ *   • setting/relaunching before today's block time does NOT retroactively block;
+ *   • a block persists across midnight (and inactive days) until a connection;
+ *   • verifying a connection (advances baseline) lifts the block until the next trigger.
  */
 export function isBlockTimeActive(
   blockTimeUtc: string,
-  frequency: "daily" | "5x" | "weekends" | null
+  frequency: Frequency | null,
+  baselineMs: number
 ): boolean {
-  if (!frequency) return false;
-
-  const now = new Date();
-  const dayOfWeek = now.getDay(); // 0 = Sunday … 6 = Saturday
-
-  const activeOnDay = (() => {
-    switch (frequency) {
-      case "daily":    return true;
-      case "5x":       return dayOfWeek >= 1 && dayOfWeek <= 5; // Mon–Fri
-      case "weekends": return dayOfWeek === 0 || dayOfWeek === 6;
-      default:         return false;
-    }
-  })();
-
-  if (!activeOnDay) return false;
-
-  const { hour, minute } = getLocalBlockTime(blockTimeUtc);
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  const blockMinutes = hour * 60 + minute;
-
-  return nowMinutes >= blockMinutes;
+  const trigger = mostRecentTriggerMs(blockTimeUtc, frequency);
+  return trigger !== null && trigger > baselineMs;
 }
 
 /**
