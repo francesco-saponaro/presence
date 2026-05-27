@@ -13,13 +13,21 @@
 
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
-import { addMinutes, addHours, isAfter } from "date-fns";
+import { addHours } from "date-fns";
+import i18n from "@/i18n";
 import { getLocalBlockTime } from "@/lib/timezone";
 import { useRoutineStore } from "@/store/routine";
 
 // Notification identifiers — used to cancel & re-schedule without duplicates
 const WARMUP_ID = "presence-warmup";
 const INACTIVITY_ID = "presence-inactivity";
+
+// Active block weekdays per frequency, in Expo's WEEKLY-trigger convention
+// (1 = Sunday, 2 = Monday … 7 = Saturday).
+const ACTIVE_WEEKDAYS: Record<string, number[]> = {
+  "5x": [2, 3, 4, 5, 6], // Mon–Fri
+  weekends: [1, 7],      // Sun, Sat
+};
 
 // ─── Permission ───────────────────────────────────────────────────────────────
 
@@ -47,18 +55,25 @@ export async function ensureNotificationChannel(): Promise<void> {
 // ─── Warm-up notification (15 min before block time) ─────────────────────────
 
 /**
- * Schedule (or re-schedule) the warm-up notification.
- * Cancels any previous warm-up before scheduling the new one.
+ * Schedule (or re-schedule) the warm-up notification, 15 minutes before block time.
+ * Cancels any previous warm-ups first.
  *
- * @param blockTimeUtc  "HH:MM" string stored in UTC (from routines table)
+ * Frequency-aware:
+ *   • "daily"    → one repeating DAILY trigger.
+ *   • "5x"       → repeating WEEKLY triggers on Mon–Fri.
+ *   • "weekends" → repeating WEEKLY triggers on Sat & Sun.
+ * Repeating triggers fire on their own without the app being foregrounded, and
+ * only on real blocking days (so no "shield goes up" reminder on an off day).
+ *
+ * @param blockTimeUtc  UTC ISO string encoding the local block time
  * @param frequency     "daily" | "5x" | "weekends"
  */
 export async function scheduleWarmupNotification(
   blockTimeUtc: string,
   frequency: string
 ): Promise<void> {
-  // Always cancel the old one first to avoid duplicates
-  await Notifications.cancelScheduledNotificationAsync(WARMUP_ID).catch(() => {});
+  // Clear every previously-scheduled warm-up (daily + per-weekday) to avoid dupes.
+  await cancelWarmupNotification();
 
   const granted = await requestNotificationPermission();
   if (!granted) return;
@@ -67,46 +82,55 @@ export async function scheduleWarmupNotification(
 
   const { hour, minute } = getLocalBlockTime(blockTimeUtc);
 
-  // Compute the next fire time (today or tomorrow) for the warm-up (15 min early)
-  const now = new Date();
-  const candidateToday = new Date(now);
-  candidateToday.setHours(hour, minute, 0, 0);
-  const warmupToday = addMinutes(candidateToday, -15);
+  // Warm-up fires 15 min before block time. If that crosses midnight backwards,
+  // it lands on the PREVIOUS day (dayOffset = -1), which shifts the fire weekday.
+  let warmupMinutes = hour * 60 + minute - 15;
+  let dayOffset = 0;
+  if (warmupMinutes < 0) {
+    warmupMinutes += 24 * 60;
+    dayOffset = -1;
+  }
+  const warmupHour = Math.floor(warmupMinutes / 60);
+  const warmupMinute = warmupMinutes % 60;
 
-  // If the warm-up time has already passed today, schedule for tomorrow
-  const fireDate = isAfter(warmupToday, now) ? warmupToday : (() => {
-    const tomorrow = addMinutes(candidateToday, -15);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    return tomorrow;
-  })();
+  const content = {
+    title: "Presence",
+    body: i18n.t("notifications.warmupBody"),
+    sound: true,
+    data: { type: "warmup" },
+  };
 
-  // For frequency other than "daily", use a one-shot trigger on the next valid day
-  // and let the app reschedule on the next foreground event.
-  // (Daily repeat is safe for all frequencies since the shield engine controls actual blocking.)
-  const trigger: Notifications.NotificationTriggerInput =
-    frequency === "daily"
-      ? {
-          type: Notifications.SchedulableTriggerInputTypes.DAILY,
-          hour: fireDate.getHours(),
-          minute: fireDate.getMinutes(),
-          channelId: "presence-reminders",
-        }
-      : {
-          type: Notifications.SchedulableTriggerInputTypes.DATE,
-          date: fireDate,
-          channelId: "presence-reminders",
-        };
+  if (frequency === "daily") {
+    await Notifications.scheduleNotificationAsync({
+      identifier: WARMUP_ID,
+      content,
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DAILY,
+        hour: warmupHour,
+        minute: warmupMinute,
+        channelId: "presence-reminders",
+      },
+    });
+    return;
+  }
 
-  await Notifications.scheduleNotificationAsync({
-    identifier: WARMUP_ID,
-    content: {
-      title: "Presence",
-      body: "Your scroll shield goes up in 15 minutes. Who haven't you spoken to in a while?",
-      sound: true,
-      data: { type: "warmup" },
-    },
-    trigger,
-  });
+  // 5x / weekends → one repeating WEEKLY trigger per active block day.
+  const blockWeekdays = ACTIVE_WEEKDAYS[frequency] ?? [];
+  for (const blockWeekday of blockWeekdays) {
+    // Shift to the warm-up's actual fire weekday if it crossed midnight backwards.
+    const warmupWeekday = ((blockWeekday - 1 + dayOffset + 7) % 7) + 1;
+    await Notifications.scheduleNotificationAsync({
+      identifier: `${WARMUP_ID}-${warmupWeekday}`,
+      content,
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
+        weekday: warmupWeekday,
+        hour: warmupHour,
+        minute: warmupMinute,
+        channelId: "presence-reminders",
+      },
+    });
+  }
 }
 
 // ─── Inactivity notification (48 h after last connection) ─────────────────────
@@ -130,7 +154,7 @@ export async function scheduleInactivityNotification(): Promise<void> {
     identifier: INACTIVITY_ID,
     content: {
       title: "Presence",
-      body: "It's been a few days. Take 2 minutes to ask a friend how they're doing.",
+      body: i18n.t("notifications.inactivityBody"),
       sound: true,
       data: { type: "inactivity" },
     },
@@ -145,7 +169,11 @@ export async function scheduleInactivityNotification(): Promise<void> {
 // ─── Cancel helpers ───────────────────────────────────────────────────────────
 
 export async function cancelWarmupNotification(): Promise<void> {
+  // Cancel the daily warm-up and every possible per-weekday warm-up.
   await Notifications.cancelScheduledNotificationAsync(WARMUP_ID).catch(() => {});
+  for (let weekday = 1; weekday <= 7; weekday++) {
+    await Notifications.cancelScheduledNotificationAsync(`${WARMUP_ID}-${weekday}`).catch(() => {});
+  }
 }
 
 export async function cancelInactivityNotification(): Promise<void> {

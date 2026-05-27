@@ -326,4 +326,20 @@ public class PresenceScreenTime: RCTEventEmitter {
         }
         resolve(nil)
     }
+
+    /**
+     Writes the current app language code (e.g. "fr") into the shared App Group so
+     the out-of-process ShieldConfiguration extension — which has no access to
+     react-i18next — can localise the shield overlay text.
+     */
+    @objc
+    public func setAppLanguage(_ code: String,
+                               resolve: @escaping RCTPromiseResolveBlock,
+                               reject: @escaping RCTPromiseRejectBlock) {
+        if let defaults = UserDefaults(suiteName: appGroup) {
+            defaults.set(code, forKey: "appLanguage")
+            defaults.synchronize()
+        }
+        resolve(nil)
+    }
 }

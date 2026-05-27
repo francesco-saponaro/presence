@@ -239,9 +239,16 @@
     "noScheduleTitle": "Nessun orario impostato",
     "noScheduleBody": "Scegli un orario e le app selezionate si bloccheranno finché non contatti qualcuno di reale.",
     "setSchedule": "Imposta un orario",
+    "lockedTitle": "Le tue app sono bloccate",
+    "lockedBody": "Contatta qualcuno di reale e verificalo per sbloccare. Potrai modificare orario e app una volta libero.",
+    "lockedCta": "Connettiti per sbloccare",
     "removeSchedule": "Rimuovi orario",
     "scheduleRemoved": "Orario rimosso.",
     "skipForNow": "Salta per ora"
+  },
+  "notifications": {
+    "warmupBody": "Il tuo scudo anti-scroll si attiva tra 15 minuti. Con chi non parli da un po'?",
+    "inactivityBody": "Sono passati alcuni giorni. Prenditi 2 minuti per chiedere a un amico come sta."
   },
   "shield": {
     "title": "Sostituisci l'invio di meme con una vera connessione. Scrivi a qualcuno, carica lo screenshot e sblocca le tue app.",

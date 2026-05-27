@@ -12,6 +12,7 @@ import { PickerModule, ScreenTimeModule, countAppsInSelection } from "@/lib/nati
 import { useShieldStore } from "@/store/shield";
 import { syncRoutineToSupabase } from "@/lib/routineSync";
 import { PillButton } from "@/components/ui/PillButton";
+import { LockedWhileBlocked } from "@/components/ui/LockedWhileBlocked";
 import Toast from "react-native-toast-message";
 
 const ANDROID_APPS = [
@@ -36,6 +37,14 @@ export default function BlockedAppsScreen() {
     setBlockedAppNames,
     setFamilyActivitySelection,
   } = useRoutineStore();
+
+  // While the shield is active, editing blocked apps (e.g. deselecting them all)
+  // would lift the block without verifying a connection. Lock until they connect.
+  const isBlocked = useShieldStore((s) => s.isBlocked);
+  // TEMP (pre-release testing): edit-lock disabled so blocked apps can be changed
+  // while blocked. Set EDIT_LOCK_WHILE_BLOCKED back to true before release.
+  const EDIT_LOCK_WHILE_BLOCKED = false;
+  const showLock = isBlocked && EDIT_LOCK_WHILE_BLOCKED;
 
   // iOS: count of selected items derived from the persisted selection
   const [selectionCount, setSelectionCount] = useState(() =>
@@ -127,6 +136,10 @@ export default function BlockedAppsScreen() {
       </View>
       <View className="h-px bg-greige/30 dark:bg-brown-mid/20 mx-6 mb-2" />
 
+      {showLock ? (
+        <LockedWhileBlocked />
+      ) : (
+      <>
       {Platform.OS === "ios" ? (
         // ── iOS: FamilyActivityPicker ──────────────────────────────────────
         <View className="flex-1 px-6 pt-6">
@@ -229,6 +242,8 @@ export default function BlockedAppsScreen() {
           </>
         )}
       </View>
+      </>
+      )}
     </SafeAreaView>
   );
 }

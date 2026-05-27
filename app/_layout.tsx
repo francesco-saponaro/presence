@@ -10,6 +10,7 @@ import {
   resetPurchasesUser,
 } from "@/lib/purchases";
 import { isInRecovery, storePendingResetUrl } from "@/lib/recoveryState";
+import { ScreenTimeModule } from "@/lib/nativeModules";
 import { startShieldEngine } from "@/lib/shieldEngine";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/store/auth";
@@ -93,6 +94,21 @@ export default function RootLayout() {
       }
     }
   }, [userHydrated]);
+
+  // Mirror the active language into the App Group so the out-of-process
+  // ShieldConfiguration extension can localise the shield overlay. Writes on
+  // mount and on every language change (i18n.changeLanguage fires this event,
+  // including the hydration-driven restore above and manual picker changes).
+  useEffect(() => {
+    const writeLang = (lng: string) => {
+      ScreenTimeModule.setAppLanguage(lng).catch(() => {});
+    };
+    writeLang(i18n.language);
+    i18n.on("languageChanged", writeLang);
+    return () => {
+      i18n.off("languageChanged", writeLang);
+    };
+  }, []);
 
   // Start the shield engine once on mount (AppState listener + schedule check).
   useEffect(() => {

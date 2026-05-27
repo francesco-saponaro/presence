@@ -239,9 +239,16 @@
     "noScheduleTitle": "No schedule yet",
     "noScheduleBody": "Choose a time and your selected apps will lock until you reach out to someone real.",
     "setSchedule": "Set a schedule",
+    "lockedTitle": "Your apps are locked",
+    "lockedBody": "Reach out to someone real and verify it to unlock. You can change your schedule and apps once you're free.",
+    "lockedCta": "Connect to unlock",
     "removeSchedule": "Remove schedule",
     "scheduleRemoved": "Schedule removed.",
     "skipForNow": "Skip for now"
+  },
+  "notifications": {
+    "warmupBody": "Your scroll shield goes up in 15 minutes. Who haven't you spoken to in a while?",
+    "inactivityBody": "It's been a few days. Take 2 minutes to ask a friend how they're doing."
   },
   "shield": {
     "title": "Replace meme sending with actual genuine connection. Text someone, upload the screenshot, and unlock your apps.",

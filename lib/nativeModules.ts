@@ -38,6 +38,9 @@ interface ScreenTimeModuleType {
   /** Writes the last verified-connection time (epoch ms) to the shared App Group
    *  so the DeviceActivityMonitor extension won't re-block after a connection. */
   recordLastConnection(epochMs: number): Promise<void>;
+  /** Writes the current app language code to the shared App Group so the
+   *  ShieldConfiguration extension can localise the shield overlay text. */
+  setAppLanguage(code: string): Promise<void>;
 }
 
 function buildScreenTimeStub(): ScreenTimeModuleType {
@@ -52,6 +55,7 @@ function buildScreenTimeStub(): ScreenTimeModuleType {
     scheduleMonitoring: () => Promise.resolve(),
     stopMonitoring: () => Promise.resolve(),
     recordLastConnection: () => Promise.resolve(),
+    setAppLanguage: () => Promise.resolve(),
   };
 }
 

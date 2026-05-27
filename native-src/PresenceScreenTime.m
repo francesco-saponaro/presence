@@ -35,4 +35,8 @@ RCT_EXTERN_METHOD(recordLastConnection:(double)epochMs
                   resolve:(RCTPromiseResolveBlock)resolve
                   reject:(RCTPromiseRejectBlock)reject)
 
+RCT_EXTERN_METHOD(setAppLanguage:(NSString *)code
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+
 @end

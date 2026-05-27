@@ -12,10 +12,13 @@ import {
 } from "@gorhom/bottom-sheet";
 import type { BottomSheetBackdropProps } from "@gorhom/bottom-sheet";
 import { useRoutineStore } from "@/store/routine";
+import { useShieldStore } from "@/store/shield";
 import { getLocalBlockTime } from "@/lib/timezone";
 import { syncRoutineToSupabase } from "@/lib/routineSync";
 import { checkAndUpdateShield, deactivateSchedule } from "@/lib/shieldEngine";
+import { scheduleWarmupNotification } from "@/lib/notifications";
 import { PillButton } from "@/components/ui/PillButton";
+import { LockedWhileBlocked } from "@/components/ui/LockedWhileBlocked";
 import Toast from "react-native-toast-message";
 
 type Frequency = "daily" | "5x" | "weekends";
@@ -64,6 +67,14 @@ export default function BlockTimeScreen() {
   const [isSettingUp, setIsSettingUp] = useState(false);
   const showTimer = hasSchedule || isSettingUp;
 
+  // While the shield is active, editing the schedule would let the user lift the
+  // block without verifying a connection. Lock the page until they connect.
+  const isBlocked = useShieldStore((s) => s.isBlocked);
+  // TEMP (pre-release testing): edit-lock disabled so the schedule can be changed /
+  // removed while blocked. Set EDIT_LOCK_WHILE_BLOCKED back to true before release.
+  const EDIT_LOCK_WHILE_BLOCKED = false;
+  const showLock = isBlocked && EDIT_LOCK_WHILE_BLOCKED;
+
   const renderBackdrop = useCallback(
     (props: BottomSheetBackdropProps) => (
       <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} />
@@ -92,19 +103,23 @@ export default function BlockTimeScreen() {
       });
     } else {
       Toast.show({
-        type: "info",
+        type: "prominent",
         text1: t("profile.scheduleSaved"),
         text2: t("blockTime.startsTomorrow", { time: timeStr }),
-        visibilityTime: 8000,
+        visibilityTime: 10000,
         position: "top",
       });
     }
   }
 
   async function handleSave() {
-    setBlockTime(selectedTime.toISOString());
+    const utc = selectedTime.toISOString();
+    setBlockTime(utc);
     setFrequency(frequency);
     syncRoutineToSupabase().catch(() => {});
+    // Re-schedule the frequency-aware warm-up reminders for the new time/frequency
+    // (no-op if notifications were denied; never prompts post-onboarding).
+    scheduleWarmupNotification(utc, frequency).catch(() => {});
     scheduleStartToast(selectedTime);
     router.back();
     // Re-evaluate the shield immediately so the homepage status and the native
@@ -128,6 +143,10 @@ export default function BlockTimeScreen() {
       </View>
       <View className="h-px bg-greige/30 dark:bg-brown-mid/20 mx-6 mb-2" />
 
+      {showLock ? (
+        <LockedWhileBlocked />
+      ) : (
+      <>
       <View className="flex-1 px-6 justify-center">
         {showTimer ? (
           <>
@@ -255,6 +274,8 @@ export default function BlockTimeScreen() {
           />
         </BottomSheetView>
       </BottomSheetModal>
+      </>
+      )}
     </SafeAreaView>
   );
 }

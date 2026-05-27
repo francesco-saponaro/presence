@@ -239,9 +239,16 @@
     "noScheduleTitle": "Aucun horaire défini",
     "noScheduleBody": "Choisissez une heure et vos applis sélectionnées se verrouilleront jusqu'à ce que vous contactiez quelqu'un de réel.",
     "setSchedule": "Définir un horaire",
+    "lockedTitle": "Vos applis sont verrouillées",
+    "lockedBody": "Contactez quelqu'un de réel et vérifiez-le pour déverrouiller. Vous pourrez modifier votre horaire et vos applis une fois libre.",
+    "lockedCta": "Se connecter pour déverrouiller",
     "removeSchedule": "Supprimer le planning",
     "scheduleRemoved": "Planning supprimé.",
     "skipForNow": "Passer pour l'instant"
+  },
+  "notifications": {
+    "warmupBody": "Votre bouclier anti-scroll s'active dans 15 minutes. À qui n'avez-vous pas parlé depuis un moment ?",
+    "inactivityBody": "Cela fait quelques jours. Prenez 2 minutes pour demander à un ami comment il va."
   },
   "shield": {
     "title": "Remplacez l'envoi de mèmes par une vraie connexion. Écrivez à quelqu'un, téléchargez la capture et déverrouillez vos apps.",

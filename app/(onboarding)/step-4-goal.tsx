@@ -80,9 +80,9 @@ export default function Step4Goal() {
       });
     } else {
       Toast.show({
-        type: "info",
+        type: "prominent",
         text1: t("blockTime.startsTomorrow", { time: timeStr }),
-        visibilityTime: 8000,
+        visibilityTime: 10000,
         position: "top",
       });
     }
