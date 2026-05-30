@@ -143,7 +143,8 @@
       "androidBatteryTitle": "Optimización de batería",
       "androidBatteryBody": "En la siguiente pantalla, toca 'No optimizar' para que Presence pueda funcionar en segundo plano.",
       "requiredLockTitle": "Este permiso es obligatorio.",
-      "requiredLockBody": "Para cambiarlo, ve a los Ajustes de tu dispositivo. Presence no puede funcionar sin él."
+      "requiredLockBody": "Para cambiarlo, ve a los Ajustes de tu dispositivo. Presence no puede funcionar sin él.",
+      "photoDeniedBody": "Presence necesita acceso a las fotos para verificar tus capturas. Actívalo en Ajustes."
     },
     "step7": {
       "label": "Paso 9 de 9",

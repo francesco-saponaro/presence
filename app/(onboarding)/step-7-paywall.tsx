@@ -26,6 +26,8 @@ import {
 } from "@/lib/purchases";
 import { supabase } from "@/lib/supabase";
 import { syncRoutineToSupabase } from "@/lib/routineSync";
+import { scheduleWarmupNotification } from "@/lib/notifications";
+import { useRoutineStore } from "@/store/routine";
 
 const TOS_URL = "https://gist.github.com/francesco-saponaro/8fc0b7c3e435c4880cca34b70526adf4";
 const PRIVACY_URL = "https://gist.github.com/francesco-saponaro/8fc0b7c3e435c4880cca34b70526adf4";
@@ -59,6 +61,14 @@ export default function Step7Paywall() {
   async function handlePurchaseSuccess(expiresAt: string | null) {
     setSubscribed(true, expiresAt);
     completeOnboarding();
+
+    // Onboarding complete → schedule the frequency-aware warm-up reminders now
+    // that the routine is set and notification permission was resolved at the
+    // permissions step (won't prompt out of order; no-op if notifications denied).
+    const { blockTimeUtc, frequency } = useRoutineStore.getState();
+    if (blockTimeUtc && frequency) {
+      scheduleWarmupNotification(blockTimeUtc, frequency).catch(() => {});
+    }
 
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {

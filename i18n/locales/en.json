@@ -143,7 +143,8 @@
       "androidBatteryTitle": "Battery Optimization",
       "androidBatteryBody": "On the next screen, tap 'Don't optimize' so Presence can run in the background.",
       "requiredLockTitle": "This permission is required.",
-      "requiredLockBody": "To change it, go to your device Settings. Presence cannot work without it."
+      "requiredLockBody": "To change it, go to your device Settings. Presence cannot work without it.",
+      "photoDeniedBody": "Presence needs photo access to verify your connection screenshots. Turn it on in Settings."
     },
     "step7": {
       "label": "Step 9 of 9",

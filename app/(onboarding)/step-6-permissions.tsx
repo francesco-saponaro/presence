@@ -11,6 +11,7 @@ import { useTranslation } from "react-i18next";
 import {
   Alert,
   AppState,
+  Linking,
   Platform,
   ScrollView,
   Switch,
@@ -68,6 +69,7 @@ async function checkCurrentStatus(key: PermKey): Promise<boolean> {
       return false;
     }
     case "photoLibrary": {
+      // iOS "limited" (selected-photos) access already reports status "granted".
       const { status } = await ImagePicker.getMediaLibraryPermissionsAsync();
       return status === "granted";
     }
@@ -218,6 +220,34 @@ export default function Step6Permissions() {
       return;
     }
 
+    if (key === "photoLibrary") {
+      // If access was already denied once, iOS won't re-show the system dialog
+      // (same rule as Screen Time) — toggling does nothing. Detect that and
+      // deep-link to Settings instead. Otherwise request normally.
+      const current = await ImagePicker.getMediaLibraryPermissionsAsync();
+      const alreadyOk = current.status === "granted";
+      if (!alreadyOk && !current.canAskAgain) {
+        Alert.alert(
+          t("onboarding.step6.photoLibrary"),
+          t("onboarding.step6.photoDeniedBody"),
+          [
+            { text: t("blockTime.notNow"), style: "cancel" },
+            {
+              text: t("blockTime.openSettings"),
+              onPress: () => {
+                Linking.openURL("app-settings:");
+              },
+            },
+          ],
+        );
+        return;
+      }
+      const res = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const ok = res.status === "granted";
+      setGranted((prev) => ({ ...prev, photoLibrary: ok }));
+      return;
+    }
+
     const ok = await requestPermission(key);
     setGranted((prev) => ({ ...prev, [key]: ok }));
   }
@@ -231,15 +261,16 @@ export default function Step6Permissions() {
   function handleNext() {
     const missingRequired = REQUIRED.filter((k) => !granted[k]);
 
-    // if (missingRequired.length > 0) {
-    //   Toast.show({
-    //     type: "error",
-    //     text1: t("onboarding.step6.requiredErrorTitle"),
-    //     text2: t("onboarding.step6.requiredErrorBody"),
-    //     visibilityTime: 4000,
-    //   });
-    //   return;
-    // }
+    if (missingRequired.length > 0) {
+      // Screen Time + Photo Library are required — block and explain.
+      Toast.show({
+        type: "error",
+        text1: t("onboarding.step6.requiredErrorTitle"),
+        text2: t("onboarding.step6.requiredErrorBody"),
+        visibilityTime: 4000,
+      });
+      return;
+    }
 
     if (!granted.notifications) {
       // Soft warning — show toast but still navigate forward.

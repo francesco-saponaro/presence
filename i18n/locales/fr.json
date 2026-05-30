@@ -143,7 +143,8 @@
       "androidBatteryTitle": "Optimisation de la batterie",
       "androidBatteryBody": "Sur l'écran suivant, appuyez sur 'Ne pas optimiser' pour que Presence puisse fonctionner en arrière-plan.",
       "requiredLockTitle": "Cette autorisation est obligatoire.",
-      "requiredLockBody": "Pour la modifier, rendez-vous dans les Réglages de votre appareil. Presence ne peut pas fonctionner sans elle."
+      "requiredLockBody": "Pour la modifier, rendez-vous dans les Réglages de votre appareil. Presence ne peut pas fonctionner sans elle.",
+      "photoDeniedBody": "Presence a besoin d'accéder à vos photos pour vérifier vos captures. Activez-le dans Réglages."
     },
     "step7": {
       "label": "Étape 9 sur 9",
