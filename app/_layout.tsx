@@ -14,6 +14,7 @@ import { ScreenTimeModule } from "@/lib/nativeModules";
 import { startShieldEngine } from "@/lib/shieldEngine";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/store/auth";
+import { useContactsStore } from "@/store/contacts";
 import { useOnboardingStore } from "@/store/onboardingStore";
 import { useUserStore } from "@/store/userStore";
 import {
@@ -165,6 +166,9 @@ export default function RootLayout() {
           // Explicitly wipe subscription for a fresh account — clearUser() keeps
           // isSubscribed intact for same-user re-logins.
           useUserStore.getState().setSubscribed(false, null);
+          // Wipe contacts so a new account doesn't inherit the previous user's
+          // trusted contacts (and stale theme IDs that won't resolve in their DB).
+          useContactsStore.getState().clearAll();
         }
 
         useUserStore.getState().setUser(incomingId, session.user.email ?? "");
@@ -226,6 +230,7 @@ export default function RootLayout() {
             <Stack.Screen name="reset-password" />
             <Stack.Screen name="block-time" />
             <Stack.Screen name="blocked-apps" />
+            <Stack.Screen name="contacts" />
           </Stack>
           <StatusBar style="auto" />
           <Toast config={toastConfig} />

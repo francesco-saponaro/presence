@@ -8,6 +8,7 @@ import {
 } from "@/lib/shieldEngine";
 import { supabase } from "@/lib/supabase";
 import { formatBlockTime, formatCountdown } from "@/lib/timezone";
+import { useContactsStore } from "@/store/contacts";
 import { useRoutineStore } from "@/store/routine";
 import { useShieldStore } from "@/store/shield";
 import { useUserStore } from "@/store/userStore";
@@ -42,7 +43,7 @@ export default function HomeScreen() {
 
   const blockTimeUtc = useRoutineStore((s) => s.blockTimeUtc);
   const frequency = useRoutineStore((s) => s.frequency);
-  const trustedContacts = useRoutineStore((s) => s.trustedContacts);
+  const contacts = useContactsStore((s) => s.contacts);
 
   const connections = useUserStore((s) => s.lifetimeSuccessfulConnections);
   const streak = useUserStore((s) => s.currentStreak);
@@ -115,11 +116,14 @@ export default function HomeScreen() {
     const uri = result.assets[0].uri;
     setIsVerifying(true);
 
-    const validation = await runOCRValidation(uri, trustedContacts);
+    const validation = await runOCRValidation(uri, contacts);
     setIsVerifying(false);
 
     if (validation.valid) {
-      await onConnectionVerified(false);
+      await onConnectionVerified(false, {
+        contactId: validation.matchedContactId ?? null,
+        themeId: validation.matchedThemeId ?? null,
+      });
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Toast.show({ type: "success", text1: t("shield.success") });
 
@@ -131,7 +135,18 @@ export default function HomeScreen() {
     } else {
       incrementOcrFail();
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Toast.show({ type: "error", text1: t("shield.failure") });
+      // Tailored copy for the new thematic-relevance failure so the user
+      // understands what was missing instead of a generic "couldn't verify".
+      if (validation.reason === "no_theme_match" && validation.matchedContactName) {
+        Toast.show({
+          type: "error",
+          text1: t("shield.failureNoThemeTitle"),
+          text2: t("shield.failureNoThemeBody", { name: validation.matchedContactName }),
+          visibilityTime: 4500,
+        });
+      } else {
+        Toast.show({ type: "error", text1: t("shield.failure") });
+      }
     }
   }
 

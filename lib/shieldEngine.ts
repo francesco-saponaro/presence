@@ -20,7 +20,12 @@ import { useUserStore } from "@/store/userStore";
 import { isBlockTimeActive, getLocalBlockTime } from "./timezone";
 import { ScreenTimeModule, BlockerModule, addShieldActivatedListener, addScreenTimeAuthChangedListener } from "./nativeModules";
 import { supabase } from "./supabase";
-import { scheduleInactivityNotification, cancelWarmupNotification } from "./notifications";
+import {
+  scheduleInactivityNotification,
+  cancelWarmupNotification,
+  scheduleWarmupNotification,
+} from "./notifications";
+import { markThemeUsedRemote } from "./contactsSync";
 
 // Throttle the "Screen Time revoked" alert to once per app session.
 let _screenTimeAlertShown = false;
@@ -261,8 +266,15 @@ export async function checkAndUpdateShield(): Promise<void> {
 /**
  * Call this after a successful OCR verification (or manual bypass).
  * Lifts the shield, increments the lifetime counter, and queues a Supabase sync.
+ *
+ * Phase 4: pass the matched contact/theme IDs from `runOCRValidation` so the
+ * connection_proofs row records which person + which prompt was satisfied,
+ * and so the theme's `used_at` advances (driving Phase 5 rotation).
  */
-export async function onConnectionVerified(wasManualBypass = false): Promise<void> {
+export async function onConnectionVerified(
+  wasManualBypass = false,
+  matched?: { contactId?: string | null; themeId?: string | null },
+): Promise<void> {
   const { setBlocked, addPendingConnection, resetOcrFail, setLastConnectionAt } =
     useShieldStore.getState();
   const { recordConnection } = useUserStore.getState();
@@ -271,8 +283,18 @@ export async function onConnectionVerified(wasManualBypass = false): Promise<voi
 
   setBlocked(false);
   resetOcrFail();
-  addPendingConnection(timestamp);
+  addPendingConnection(timestamp, {
+    contactId: matched?.contactId ?? null,
+    themeId: matched?.themeId ?? null,
+    wasBypass: wasManualBypass,
+  });
   recordConnection();
+
+  // Advance the matched theme's used_at so the rotation moves on. Skipped for
+  // bypass (no theme was satisfied) and for the contact-without-themes path.
+  if (!wasManualBypass && matched?.themeId) {
+    markThemeUsedRemote(matched.themeId).catch(console.warn);
+  }
 
   // Advance the block baseline so the current block is satisfied and won't
   // re-trigger until the next scheduled time — both in JS and in the native
@@ -286,6 +308,13 @@ export async function onConnectionVerified(wasManualBypass = false): Promise<voi
 
   // Reset the 48-hour inactivity notification from this moment
   scheduleInactivityNotification().catch(console.warn);
+
+  // Re-bake the warm-up body so the next fire targets a fresh contact (the
+  // one just connected with is now at the bottom of the rotation queue).
+  const { blockTimeUtc, frequency } = useRoutineStore.getState();
+  if (blockTimeUtc && frequency) {
+    scheduleWarmupNotification(blockTimeUtc, frequency).catch(console.warn);
+  }
 
   // Fire-and-forget: sync happens opportunistically
   syncPendingConnections().catch(console.warn);
@@ -311,7 +340,9 @@ export async function syncPendingConnections(): Promise<void> {
     const { error } = await supabase.from("connection_proofs").insert({
       user_id: session.user.id,
       verified_at: conn.timestamp,
-      was_bypass: false,
+      was_bypass: conn.wasBypass ?? false,
+      contact_id: conn.contactId ?? null,
+      theme_id: conn.themeId ?? null,
     });
     if (!error) markConnectionSynced(conn.timestamp);
   }

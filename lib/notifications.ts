@@ -17,6 +17,13 @@ import { addHours } from "date-fns";
 import i18n from "@/i18n";
 import { getLocalBlockTime } from "@/lib/timezone";
 import { useRoutineStore } from "@/store/routine";
+import { useContactsStore } from "@/store/contacts";
+import { useShieldStore } from "@/store/shield";
+import {
+  formatWarmupLine,
+  pickNextContact,
+  pickNextTheme,
+} from "@/lib/contactRotation";
 
 // Notification identifiers — used to cancel & re-schedule without duplicates
 const WARMUP_ID = "presence-warmup";
@@ -95,7 +102,7 @@ export async function scheduleWarmupNotification(
 
   const content = {
     title: "Presence",
-    body: i18n.t("notifications.warmupBody"),
+    body: buildWarmupBody(),
     sound: true,
     data: { type: "warmup" },
   };
@@ -131,6 +138,34 @@ export async function scheduleWarmupNotification(
       },
     });
   }
+}
+
+/**
+ * Compose the warm-up notification body using the current rotation state.
+ * Fallback chain:
+ *   1. Targeted: a contact + one of their generated themes → composed prompt.
+ *   2. Name-only: a contact exists but has no themes yet → generic "reach out
+ *      to {{name}}" nudge.
+ *   3. Generic: no contacts configured → original copy.
+ *
+ * Baked in at schedule time (Expo's repeating triggers fire with static
+ * bodies). Re-scheduling on connection-verify and theme-regen keeps it fresh.
+ */
+function buildWarmupBody(): string {
+  const contacts = useContactsStore.getState().contacts;
+  const pending = useShieldStore.getState().pendingConnections;
+
+  const contact = pickNextContact(contacts, pending);
+  if (!contact) return i18n.t("notifications.warmupBody");
+
+  const theme = pickNextTheme(contact);
+  if (theme) {
+    return i18n.t("notifications.warmupBodyTargeted", {
+      line: formatWarmupLine(contact, theme),
+    });
+  }
+
+  return i18n.t("notifications.warmupBodyNoTheme", { name: contact.name });
 }
 
 // ─── Inactivity notification (48 h after last connection) ─────────────────────

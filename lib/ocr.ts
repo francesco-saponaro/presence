@@ -3,32 +3,54 @@
  *
  * OCR validation logic for connection-proof screenshots.
  *
- * Four rules (all must pass):
- *   1. Effort   — more than 4 words of text exist in the screenshot.
- *   2. Context  — at least one messaging-app UI indicator is present.
- *   3. Recency  — a time reference suggesting the conversation is recent.
- *   4. Contact  — at least one trusted contact name appears in the text
- *                 (only enforced when trustedContacts is non-empty).
+ * Five rules (all must pass):
+ *   1. Effort       — more than 4 words of text exist in the screenshot.
+ *   2. Context      — at least one messaging-app UI indicator is present.
+ *   3. Recency      — a time reference suggesting the conversation is recent.
+ *   4. Contact name — at least one trusted contact name appears in the text.
+ *   5. Thematic     — when the matched contact has generated themes, at least
+ *                     one of those themes must have a keyword that appears in
+ *                     the text. Skipped when the contact has no themes (e.g.
+ *                     a legacy contact or a previously-failed generation).
  *
- * Rule 4 keeps the user honest: they must screenshot a conversation with
- * one of the specific people they committed to during onboarding.
+ * Rules 4 + 5 keep the user honest: they must screenshot a conversation with
+ * a specific committed person AND touch on something we know matters to them.
+ *
+ * The matched contact's strongest-aligned theme is returned so the shield
+ * engine can advance its `used_at` (Phase 4 rotation foundation).
  *
  * After two consecutive failures the UI shows a "Manual bypass" option.
  */
 
+import type { Contact, ContactTheme } from "@/store/contacts";
 import { OCRModule } from "./nativeModules";
 
 export interface OCRValidationResult {
   valid: boolean;
-  /** Short reason shown in the error toast when valid === false. */
-  reason?: string;
+  /** Short reason key for the failure toast lookup. */
+  reason?:
+    | "no_text"
+    | "low_effort"
+    | "no_context_or_recency"
+    | "no_recency"
+    | "no_contact_name"
+    | "no_theme_match"
+    | "ocr_error"
+    | "unavailable";
   /** Raw OCR text (for debugging; not shown to user). */
   rawText?: string;
+  /** ID of the contact whose name was found in the text (set even on
+   *  `no_theme_match` so the UI can name them in the failure toast). */
+  matchedContactId?: string;
+  /** Display name of the matched contact — convenience for the UI. */
+  matchedContactName?: string;
+  /** ID of the strongest-aligned theme that justified the verification. */
+  matchedThemeId?: string;
 }
 
 // ── Rule 1: effort ───────────────────────────────────────────────────────────
 
-const MIN_WORD_COUNT = 5; // more than 4 words
+const MIN_WORD_COUNT = 5;
 
 // ── Rule 2: context (messaging UI) ──────────────────────────────────────────
 
@@ -67,30 +89,111 @@ const RECENCY_PATTERNS: RegExp[] = [
   /\byesterday\b/i,
 ];
 
-// ── Rule 4: trusted contact name ─────────────────────────────────────────────
+// ── Rule 4: contact-name lookup ──────────────────────────────────────────────
 
 /**
- * Returns true if at least one of the trusted contact names appears
- * (case-insensitive) anywhere in the OCR text.
- * Always returns true when no contacts have been configured yet.
+ * Find the trusted contact whose name appears in the OCR text. When multiple
+ * contacts are mentioned, we defer to the thematic step to pick a winner —
+ * this just returns all candidates.
  */
-function hasContactName(lower: string, contacts: string[]): boolean {
-  if (contacts.length === 0) return true;
-  return contacts.some((name) => lower.includes(name.toLowerCase().trim()));
+function findMentionedContacts(
+  lower: string,
+  contacts: Contact[],
+): Contact[] {
+  return contacts.filter((c) => {
+    const name = c.name.trim().toLowerCase();
+    if (!name) return false;
+    return lower.includes(name);
+  });
+}
+
+// ── Rule 5: thematic relevance ───────────────────────────────────────────────
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Loose keyword match: single-word keywords match by left-side word boundary
+ * (so "job" matches "job", "jobs", "jobless" but not "subjob" or "lockjaw").
+ * Multi-word keywords fall back to plain substring on the lowercased text.
+ */
+function keywordHits(keyword: string, fullLower: string): boolean {
+  const kw = keyword.toLowerCase().trim();
+  if (!kw) return false;
+  if (kw.includes(" ")) {
+    return fullLower.includes(kw);
+  }
+  const re = new RegExp(`\\b${escapeRegex(kw)}`, "iu");
+  return re.test(fullLower);
+}
+
+interface ThemeScore {
+  theme: ContactTheme;
+  hits: number;
+}
+
+function scoreThemes(themes: ContactTheme[], fullLower: string): ThemeScore[] {
+  return themes
+    .map((theme) => ({
+      theme,
+      hits: theme.keywords.reduce(
+        (n, kw) => n + (keywordHits(kw, fullLower) ? 1 : 0),
+        0,
+      ),
+    }))
+    .sort((a, b) => b.hits - a.hits);
+}
+
+/**
+ * Among mentioned contacts, pick the (contact, theme) pair with the strongest
+ * theme keyword match. Returns `null` when no contact's themes have any
+ * keyword hit — caller treats this as `no_theme_match`.
+ *
+ * Contacts with zero themes are passed through transparently: when none of
+ * the mentioned contacts has themes at all, we return them with no theme so
+ * the OCR still validates (legacy contacts shouldn't be punished).
+ */
+function pickMatch(
+  mentioned: Contact[],
+  fullLower: string,
+): { contact: Contact; theme: ContactTheme | null } | null {
+  if (mentioned.length === 0) return null;
+
+  let best: { contact: Contact; theme: ContactTheme | null; hits: number } | null = null;
+  let anyHasThemes = false;
+
+  for (const contact of mentioned) {
+    if (contact.themes.length === 0) continue;
+    anyHasThemes = true;
+    const scored = scoreThemes(contact.themes, fullLower);
+    const top = scored[0];
+    if (top.hits > 0 && (best === null || top.hits > best.hits)) {
+      best = { contact, theme: top.theme, hits: top.hits };
+    }
+  }
+
+  if (best) return { contact: best.contact, theme: best.theme };
+
+  // None of the mentioned contacts have themes → permissive pass with the
+  // first mentioned contact (legacy / gen-failure path).
+  if (!anyHasThemes) {
+    return { contact: mentioned[0], theme: null };
+  }
+
+  // Mentioned contacts have themes but none matched → caller fails with the
+  // first mentioned contact so the toast can name them.
+  return { contact: mentioned[0], theme: null };
 }
 
 // ── Core validator ───────────────────────────────────────────────────────────
 
 export function validateOCRText(
   text: string,
-  trustedContacts: string[] = []
+  contacts: Contact[] = [],
 ): OCRValidationResult {
   if (!text || text.trim().length === 0) {
-    return {
-      valid: false,
-      reason: "no_text",
-      rawText: text,
-    };
+    return { valid: false, reason: "no_text", rawText: text };
   }
 
   const lower = text.toLowerCase();
@@ -98,11 +201,7 @@ export function validateOCRText(
 
   // Rule 1 – effort
   if (words.length < MIN_WORD_COUNT) {
-    return {
-      valid: false,
-      reason: "low_effort",
-      rawText: text,
-    };
+    return { valid: false, reason: "low_effort", rawText: text };
   }
 
   // Rule 2 – context
@@ -111,36 +210,54 @@ export function validateOCRText(
   // Rule 3 – recency
   const hasRecency = RECENCY_PATTERNS.some((re) => re.test(text));
 
-  // Require both context AND recency (or allow one if the other is very strong).
   // Permissive OR: 20+ words AND at least one of context/recency → accept.
   const isLongConversation = words.length >= 20;
 
   if (!hasContext && !hasRecency) {
-    return {
-      valid: false,
-      reason: "no_context_or_recency",
-      rawText: text,
-    };
+    return { valid: false, reason: "no_context_or_recency", rawText: text };
   }
-
   if (!hasRecency && !isLongConversation) {
+    return { valid: false, reason: "no_recency", rawText: text };
+  }
+
+  // Rule 4 – contact name. No configured contacts → permissive pass (caller
+  // handles the empty-contacts edge case at the routing level).
+  if (contacts.length === 0) {
+    return { valid: true, rawText: text };
+  }
+
+  const mentioned = findMentionedContacts(lower, contacts);
+  if (mentioned.length === 0) {
+    return { valid: false, reason: "no_contact_name", rawText: text };
+  }
+
+  // Rule 5 – thematic relevance.
+  const match = pickMatch(mentioned, lower);
+  if (!match) {
+    // Shouldn't happen given mentioned.length > 0, but defensive.
+    return { valid: false, reason: "no_contact_name", rawText: text };
+  }
+
+  const contactHasThemes = match.contact.themes.length > 0;
+  const themeMatched = match.theme !== null;
+
+  if (contactHasThemes && !themeMatched) {
     return {
       valid: false,
-      reason: "no_recency",
+      reason: "no_theme_match",
       rawText: text,
+      matchedContactId: match.contact.id,
+      matchedContactName: match.contact.name,
     };
   }
 
-  // Rule 4 – trusted contact name
-  if (!hasContactName(lower, trustedContacts)) {
-    return {
-      valid: false,
-      reason: "no_contact_name",
-      rawText: text,
-    };
-  }
-
-  return { valid: true, rawText: text };
+  return {
+    valid: true,
+    rawText: text,
+    matchedContactId: match.contact.id,
+    matchedContactName: match.contact.name,
+    matchedThemeId: match.theme?.id,
+  };
 }
 
 // ── Full pipeline ─────────────────────────────────────────────────────────────
@@ -151,11 +268,11 @@ export function validateOCRText(
  */
 export async function runOCRValidation(
   imagePath: string,
-  trustedContacts: string[] = []
+  contacts: Contact[] = [],
 ): Promise<OCRValidationResult> {
   try {
     const text = await OCRModule.recognizeText(imagePath);
-    return validateOCRText(text, trustedContacts);
+    return validateOCRText(text, contacts);
   } catch {
     return { valid: false, reason: "ocr_error" };
   }

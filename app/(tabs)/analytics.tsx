@@ -1,10 +1,23 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { View, Text, ScrollView, RefreshControl } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
+import { Ionicons } from "@expo/vector-icons";
 import { useUserStore } from "@/store/userStore";
+import { useContactsStore } from "@/store/contacts";
+import { useShieldStore } from "@/store/shield";
 import { supabase } from "@/lib/supabase";
 import { syncPendingConnections } from "@/lib/shieldEngine";
+import {
+  formatWarmupLine,
+  lastConnectionForContact,
+  pickNextTheme,
+} from "@/lib/contactRotation";
+
+// Stale-contact threshold (days). At or beyond this, the time-ago label is
+// drawn in tan to softly call attention without being alarmist.
+const NEGLECT_DAYS = 7;
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -15,6 +28,29 @@ function formatTimeReclaimed(connections: number): string {
   if (hours === 0) return `${minutes}m`;
   if (minutes === 0) return `${hours}h`;
   return `${hours}h ${minutes}m`;
+}
+
+/** Days since the given ISO, or null if iso is null. */
+function daysSince(iso: string | null): number | null {
+  if (!iso) return null;
+  const diffMs = Date.now() - new Date(iso).getTime();
+  if (diffMs < 0) return 0;
+  return Math.floor(diffMs / MS_PER_DAY);
+}
+
+function formatLastConnection(
+  iso: string | null,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+): string {
+  if (!iso) return t("analytics.lastNever");
+  const days = daysSince(iso) ?? 0;
+  if (days === 0) return t("analytics.lastToday");
+  if (days === 1) return t("analytics.lastYesterday");
+  if (days < 14) return t("analytics.lastDaysAgo", { count: days });
+  const weeks = Math.floor(days / 7);
+  if (weeks < 8) return t("analytics.lastWeeksAgo", { count: weeks });
+  const months = Math.floor(days / 30);
+  return t("analytics.lastMonthsAgo", { count: months });
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -28,7 +64,7 @@ interface StatCardProps {
 function StatCard({ value, label, unit }: StatCardProps) {
   return (
     <View
-      className="flex-1 bg-surface-light dark:bg-surface-dark rounded-2xl p-5 border border-greige dark:border-brown-mid"
+      className="flex-1 bg-surface-light dark:bg-surface-dark rounded-2xl p-4 border border-greige dark:border-brown-mid"
       style={{
         shadowColor: "#422701",
         shadowOffset: { width: 0, height: 4 },
@@ -38,16 +74,19 @@ function StatCard({ value, label, unit }: StatCardProps) {
       }}
     >
       <View className="flex-row items-baseline gap-1">
-        <Text className="font-serif-display text-4xl text-brown-dark dark:text-tan">
+        <Text className="font-serif-display text-3xl text-brown-dark dark:text-tan">
           {value}
         </Text>
         {unit ? (
-          <Text className="font-sans-body text-sm text-greige dark:text-brown-mid">
+          <Text className="font-sans-body text-xs text-greige dark:text-brown-mid">
             {unit}
           </Text>
         ) : null}
       </View>
-      <Text className="font-sans-medium text-xs text-brown-mid dark:text-greige uppercase tracking-wider mt-1">
+      <Text
+        className="font-sans-medium text-[10px] text-brown-mid dark:text-greige uppercase tracking-wider mt-1"
+        numberOfLines={2}
+      >
         {label}
       </Text>
     </View>
@@ -65,9 +104,26 @@ export default function AnalyticsScreen() {
   const setStats = useUserStore((s) => s.setStats);
   const timeLabel = formatTimeReclaimed(connections);
 
-  const isEmpty = connections === 0;
+  const contacts = useContactsStore((s) => s.contacts);
+  const pendingConnections = useShieldStore((s) => s.pendingConnections);
 
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  /** Contacts sorted by oldest last-connection first (never-connected on top). */
+  const orderedContacts = useMemo(() => {
+    const decorated = contacts.map((c) => {
+      const lastIso = lastConnectionForContact(c.id, pendingConnections);
+      return {
+        contact: c,
+        lastIso,
+        lastMs: lastIso ? new Date(lastIso).getTime() : 0,
+      };
+    });
+    decorated.sort((a, b) => a.lastMs - b.lastMs);
+    return decorated;
+  }, [contacts, pendingConnections]);
+
+  const isContactsEmpty = contacts.length === 0;
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -111,10 +167,10 @@ export default function AnalyticsScreen() {
           <Text className="font-serif-display text-lg text-brown-mid dark:text-tan text-center mt-6 mb-2 tracking-widest uppercase">
             Presence
           </Text>
-          <View className="h-px bg-greige/40 dark:bg-brown-mid/30 mb-8" />
+          <View className="h-px bg-greige/40 dark:bg-brown-mid/30 mb-7" />
 
-          {/* ── Stat grid: connections + streak ── */}
-          <View className="flex-row gap-3 mb-3">
+          {/* ── Aggregate stats: connections | streak | time ── */}
+          <View className="flex-row gap-2.5 mb-8">
             <StatCard
               value={connections}
               label={t("analytics.connections")}
@@ -124,57 +180,128 @@ export default function AnalyticsScreen() {
               unit={t("analytics.days")}
               label={t("analytics.streak")}
             />
+            <StatCard
+              value={timeLabel}
+              label={t("analytics.timeReclaimed")}
+            />
           </View>
 
-          {/* ── Time reclaimed (full width) ── */}
-          <View
-            className="bg-surface-light dark:bg-surface-dark rounded-2xl p-5 mb-8 border border-greige dark:border-brown-mid"
-            style={{
-              shadowColor: "#422701",
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.06,
-              shadowRadius: 12,
-              elevation: 2,
-            }}
-          >
-            <View className="flex-row items-baseline gap-1">
-              <Text className="font-serif-display text-4xl text-brown-dark dark:text-tan">
-                {timeLabel}
-              </Text>
-            </View>
-            <Text className="font-sans-medium text-xs text-brown-mid dark:text-greige uppercase tracking-wider mt-1">
-              {t("analytics.timeReclaimed")}
-            </Text>
-          </View>
+          {/* ── Your circle section ── */}
+          <Text className="font-sans-medium text-xs text-brown-mid dark:text-greige uppercase tracking-widest mb-3">
+            {t("analytics.relationshipsSection")}
+          </Text>
 
-          {/* ── Empty state ── */}
-          {isEmpty && (
-            <View className="bg-surface-light dark:bg-surface-dark rounded-3xl px-8 py-10 items-center border border-greige dark:border-brown-mid">
-              {/* Decorative circle */}
-              <View className="w-16 h-16 rounded-full border-2 border-greige dark:border-brown-mid items-center justify-center mb-6">
-                <Text className="font-serif-display text-2xl text-greige dark:text-brown-mid">
-                  ○
-                </Text>
+          {isContactsEmpty ? (
+            <View
+              className="bg-surface-light dark:bg-surface-dark rounded-3xl px-8 py-8 items-center border border-greige dark:border-brown-mid"
+              style={{
+                shadowColor: "#422701",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.05,
+                shadowRadius: 8,
+              }}
+            >
+              <View
+                className="w-12 h-12 rounded-full items-center justify-center mb-3"
+                style={{ backgroundColor: "rgba(214,181,136,0.2)" }}
+              >
+                <Ionicons name="people-outline" size={22} color="#705E46" />
               </View>
-
-              <Text className="font-serif-display text-2xl text-text-dark dark:text-text-light text-center mb-3">
-                {t("analytics.emptyTitle")}
+              <Text className="font-serif-display text-xl text-text-dark dark:text-text-light text-center mb-2">
+                {t("analytics.relationshipsEmptyTitle")}
               </Text>
               <Text className="font-sans-body text-sm text-brown-mid dark:text-greige text-center leading-relaxed">
-                {t("analytics.empty")}
+                {t("analytics.relationshipsEmptyBody")}
               </Text>
             </View>
-          )}
+          ) : (
+            <View className="gap-3 mb-8">
+              {orderedContacts.map(({ contact, lastIso }) => {
+                const themeCount = contact.themes.length;
+                const touchedCount = contact.themes.filter((th) => th.usedAt !== null).length;
+                const days = daysSince(lastIso);
+                const neglected = days === null || days >= NEGLECT_DAYS;
+                const lastLabel = formatLastConnection(lastIso, t);
+                const suggestion = pickNextTheme(contact);
+                const showSuggestion =
+                  suggestion !== null && suggestion.usedAt === null;
 
-          {/* ── Insight card (shown when connections > 0) ── */}
-          {!isEmpty && (
-            <View className="bg-brown-dark dark:bg-surface-dark rounded-3xl px-8 py-7 items-center">
-              <Text className="font-serif-display text-xl text-text-light dark:text-tan text-center leading-relaxed mb-1">
-                {t("analytics.insightTitle", { count: connections })}
-              </Text>
-              <Text className="font-sans-body text-sm text-tan/70 dark:text-greige text-center leading-relaxed">
-                {t("analytics.insightBody", { time: timeLabel })}
-              </Text>
+                return (
+                  <View
+                    key={contact.id}
+                    className="bg-surface-light dark:bg-surface-dark rounded-2xl px-5 py-4 border border-greige/60 dark:border-brown-mid/60"
+                    style={{
+                      shadowColor: "#422701",
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.05,
+                      shadowRadius: 8,
+                      elevation: 2,
+                    }}
+                  >
+                    {/* Header: avatar + name + last-connection */}
+                    <View className="flex-row items-center">
+                      <View
+                        className="w-11 h-11 rounded-full items-center justify-center mr-3"
+                        style={{ backgroundColor: "rgba(214,181,136,0.25)" }}
+                      >
+                        <Text className="font-sans-bold text-base text-brown-dark dark:text-tan">
+                          {contact.name[0]?.toUpperCase()}
+                        </Text>
+                      </View>
+                      <View className="flex-1">
+                        <Text className="font-sans-medium text-base text-text-dark dark:text-text-light">
+                          {contact.name}
+                        </Text>
+                        <Text
+                          className={`font-sans-body text-xs mt-0.5 ${
+                            neglected
+                              ? "text-brown-dark dark:text-tan font-sans-medium"
+                              : "text-greige dark:text-brown-mid"
+                          }`}
+                        >
+                          {lastLabel}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Themes progress */}
+                    {themeCount > 0 && (
+                      <View className="flex-row items-center mt-3 pt-3 border-t border-greige/30 dark:border-brown-mid/30">
+                        <Ionicons name="sparkles-outline" size={14} color="#705E46" />
+                        <Text className="font-sans-body text-xs text-brown-mid dark:text-greige ml-1.5">
+                          {t("analytics.themesProgress", {
+                            used: touchedCount,
+                            total: themeCount,
+                          })}
+                        </Text>
+                      </View>
+                    )}
+                    {themeCount === 0 && (
+                      <View className="flex-row items-center mt-3 pt-3 border-t border-greige/30 dark:border-brown-mid/30">
+                        <Ionicons name="alert-circle-outline" size={14} color="#C6C0B9" />
+                        <Text className="font-sans-body text-xs text-greige ml-1.5">
+                          {t("analytics.themesNone")}
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Unexplored suggestion (only when a fresh unused theme exists) */}
+                    {showSuggestion && (
+                      <View
+                        className="mt-3 rounded-xl px-3 py-2.5"
+                        style={{ backgroundColor: "rgba(214,181,136,0.18)" }}
+                      >
+                        <Text className="font-sans-medium text-[10px] text-brown-mid dark:text-greige uppercase tracking-widest mb-1">
+                          {t("analytics.suggestionLabel")}
+                        </Text>
+                        <Text className="font-serif-display text-sm text-brown-dark dark:text-tan leading-relaxed">
+                          &ldquo;{formatWarmupLine(contact, suggestion)}&rdquo;
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
             </View>
           )}
         </View>
