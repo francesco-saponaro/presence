@@ -39,29 +39,45 @@ const LANGUAGE_NAMES: Record<string, string> = {
   pt: "Portuguese",
 };
 
-const SYSTEM_PROMPT = `You help someone strengthen real-life relationships. Given details about a specific person, generate exactly ${THEME_COUNT} short, specific, warm message ideas the user can send to them. These are conversation starters or check-ins about things that genuinely matter to this person — not generic small talk.
+const SYSTEM_PROMPT = `You help someone strengthen real-life relationships through GENUINE TEXT MESSAGES they write themselves. Given details about a specific person, generate exactly ${THEME_COUNT} short, specific, warm message ideas the user can send to them. These are conversation starters or check-ins about things that genuinely matter to this person — not generic small talk.
+
+ABSOLUTE BANS — never violate these:
+- NEVER suggest sending memes, GIFs, stickers, images, photos, videos, voice notes, links, emojis, or any non-text content. The whole purpose of this app is to REPLACE meme-sending with real conversations. Every theme must be something the user TYPES with words.
+- NEVER use the words "meme", "gif", "sticker", "image", "photo", "picture", "video", "voice note", "emoji", or "link" anywhere in the theme text or keywords.
+- Talking about an event in writing is fine. Sharing media is not.
 
 Each theme is a short ACTION PHRASE (not a full sentence) in lowercase infinitive form, written so it composes naturally as: "Tomorrow we'll remind you to {theme}."
 
-CRITICAL: Use the literal placeholder {name} where the person's name belongs in the phrase — never the actual name. The client substitutes it at display time.
+Use the literal placeholder {name} where the person's name belongs in the phrase — never the actual name. The client substitutes it at display time.
 
-Examples of the exact format expected (assuming the contact's name is "Marco"):
-- "ask {name} how his new job at the firm is going"
-- "share that photo from the trip with {name}"
-- "check in on how {name}'s mom is doing after the surgery"
+Examples of the exact format expected:
+- "ask {name} how the new job at the firm is going"
 - "tell {name} you're proud of him for finishing the marathon"
-- "send {name} the book you mentioned last month"
+- "check in on how {name}'s mom is doing after the surgery"
+- "ask {name} about that book they were reading"
+- "thank {name} for being there last week"
 
 Rules:
 - Each theme must be specific to THIS person, drawing on the details provided. Do not invent facts that contradict the details.
 - Lowercase, no leading capital, no trailing period.
 - Always include the {name} placeholder (exact spelling, curly braces, lowercase) at least once per theme.
-- Vary the verbs: ask, tell, share, check in on, send, remind, thank, congratulate, etc. Do not start every theme the same way.
-- For each theme, also provide 3-5 short lowercase keyword tokens that would plausibly appear in a real message about that theme. Keywords are used to verify the user actually messaged about this topic, so they must be content words (nouns, verbs, topics), not greetings or fillers like "how", "are", "you", "the", "hi", "hey", "good".
+- Vary the verbs: ask, tell, share (verbally), check in on, thank, congratulate, remind, etc. Do not start every theme the same way. Do NOT use "send" with media objects.
+
+KEYWORDS — these verify the user actually wrote about the theme, so they MUST reflect how real people text in everyday life:
+- Provide 15 to 20 keywords per theme — broad coverage matters because we use them to detect that the user touched on this topic, and casual texts can use very different vocabulary from one writer to another.
+- Use CASUAL, COLLOQUIAL words a friend would actually type. NOT formal vocabulary.
+- Include common abbreviations and informal variants where they exist.
+  Theme: "congratulate {name} on the new promotion"
+   GOOD keywords: ["congrats", "promotion", "promoted", "raise", "job", "boss", "amazing", "stoked", "happy", "proud"]
+   BAD keywords: ["congratulate", "achievement", "endeavor", "professional", "success"]
+- Each keyword must be ONE WORD (no spaces).
+- Keywords must be content words (topics, names of things, verbs, adjectives), NOT greetings or fillers like "how", "are", "you", "the", "hi", "hey", "good", "well".
 - Keywords must NOT include the person's name and must NOT include the literal "{name}" placeholder.
-- Output STRICTLY as JSON in this exact shape, no prose, no markdown:
-  { "themes": [ { "text": string, "keywords": string[] } ] }
-- Output exactly ${THEME_COUNT} themes.`;
+- Keywords must NOT include any of the banned media words listed above (meme, gif, etc.).
+
+Output STRICTLY as JSON in this exact shape, no prose, no markdown:
+{ "themes": [ { "text": string, "keywords": string[] } ] }
+Output exactly ${THEME_COUNT} themes.`;
 
 interface Theme {
   text: string;
@@ -103,13 +119,24 @@ function sanitizeThemes(raw: unknown): Theme[] {
     const keywordsRaw = (item as Theme).keywords;
     if (!text || !Array.isArray(keywordsRaw)) continue;
 
+    // Strip any banned media words the model might still slip in.
+    const BANNED = new Set([
+      "meme", "memes", "gif", "gifs", "sticker", "stickers",
+      "image", "images", "photo", "photos", "picture", "pictures",
+      "video", "videos", "emoji", "emojis", "link", "links",
+    ]);
     const keywords = keywordsRaw
       .filter((k): k is string => typeof k === "string")
       .map((k) => k.trim().toLowerCase())
-      .filter((k) => k.length > 1 && k.length < 32)
-      .slice(0, 5);
+      .filter((k) => k.length > 1 && k.length < 32 && !BANNED.has(k))
+      .slice(0, 20);
 
     if (keywords.length < 2) continue;
+
+    // Drop themes whose text mentions a banned media term — the model
+    // sometimes still slips one through despite the prompt.
+    const lowered = text.toLowerCase();
+    if ([...BANNED].some((w) => lowered.includes(w))) continue;
     cleaned.push({ text, keywords });
     if (cleaned.length >= THEME_COUNT) break;
   }
@@ -122,7 +149,26 @@ async function callOpenAI(
   languageCode: string,
 ): Promise<Theme[]> {
   const languageName = LANGUAGE_NAMES[languageCode] ?? "English";
-  const localisedSystem = `${SYSTEM_PROMPT}\n\nWrite every theme in ${languageName}. Keywords must also be in ${languageName} (still lowercase, still content words, still excluding the {name} placeholder and the person's actual name).`;
+  // Language detection is the model's job, but answer-language must win over
+  // app-language. Casual texts use the same language as the writer's notes —
+  // if we generate keywords in Spanish but the user texts in English, the
+  // keyword match will fail every time.
+  const localisedSystem = `${SYSTEM_PROMPT}
+
+LANGUAGE — THIS IS THE MOST IMPORTANT RULE FOR KEYWORDS TO WORK:
+
+Step 1. Read the answers (Q1–Q4) below and detect the primary language they are written in.
+Step 2. Write EVERY theme and EVERY keyword in THAT detected answer-language. Not the app language. The detected answer-language.
+Step 3. ONLY if the answers are completely blank or contain no recognizable real words, fall back to ${languageName}.
+
+Why this matters: the user texts their contacts in the same language they used to write these answers. If the themes and keywords come out in ${languageName} but the user actually texts in English (or any other language), the keyword-based verification will fail on every screenshot. So detecting the answer-language correctly is non-negotiable.
+
+For example:
+- If the answers are in English (e.g. "We met at university. She just got a new job."), output English themes and English keywords — even if the app language is ${languageName}.
+- If the answers are in Italian (e.g. "Ci siamo conosciuti all'università."), output Italian themes and Italian keywords.
+- Only an empty / 1-word / nonsense answer set should fall back to ${languageName}.
+
+Do NOT mix languages within a single output. All themes and all keywords in one response must be in the SAME language.`;
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",

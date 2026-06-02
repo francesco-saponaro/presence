@@ -58,6 +58,10 @@ interface ContactsState {
 
   /** Wipe all contacts + themes. Called by the new-account branch in _layout.tsx. */
   clearAll: () => void;
+
+  /** Replace the entire contact list. Used by pullContactsFromSupabase on
+   *  sign-in to overwrite stale local data with the server's truth. */
+  setContacts: (contacts: Contact[]) => void;
 }
 
 export const useContactsStore = create<ContactsState>()(
@@ -113,6 +117,8 @@ export const useContactsStore = create<ContactsState>()(
         }),
 
       clearAll: () => set({ contacts: [] }),
+
+      setContacts: (contacts) => set({ contacts }),
     }),
     {
       name: "presence-contacts",

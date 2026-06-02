@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -43,6 +44,8 @@ export default function ContactsScreen() {
       });
       return;
     }
+    // Dismiss the name-input keyboard so it doesn't cover the questions sheet.
+    Keyboard.dismiss();
     addSheetRef.current?.open(name, { showPreview: false });
     setInputValue("");
   }
@@ -73,9 +76,26 @@ export default function ContactsScreen() {
           keyboardShouldPersistTaps="handled"
         >
           {/* Intro copy */}
-          <Text className="font-sans-body text-sm text-brown-mid dark:text-greige px-6 pt-2 pb-4 leading-relaxed">
+          <Text className="font-sans-body text-sm text-brown-mid dark:text-greige px-6 pt-2 pb-3 leading-relaxed">
             {t("profile.contactsPageIntro")}
           </Text>
+
+          {/* Prominent name-match warning — same callout as onboarding so the
+              spelling rule is hard to miss on either entry point. */}
+          <View
+            className="mx-6 mb-4 rounded-2xl px-4 py-4 flex-row items-start"
+            style={{ backgroundColor: "#422701" }}
+          >
+            <Ionicons name="information-circle" size={22} color="#FDFBF7" />
+            <View className="flex-1 ml-3">
+              <Text className="font-sans-bold text-sm text-text-light mb-1">
+                {t("common.nameMatchWarningTitle")}
+              </Text>
+              <Text className="font-sans-medium text-sm text-text-light leading-relaxed">
+                {t("common.nameMatchWarning")}
+              </Text>
+            </View>
+          </View>
 
           {/* Add row */}
           <View className="px-6 flex-row gap-3 mb-5">

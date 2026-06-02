@@ -69,21 +69,31 @@ export default function Step4Goal() {
     const now = new Date();
     const todayAtTime = new Date();
     todayAtTime.setHours(time.getHours(), time.getMinutes(), 0, 0);
-    const minutesUntil = (todayAtTime.getTime() - now.getTime()) / (1000 * 60);
+    const minutesUntilToday = (todayAtTime.getTime() - now.getTime()) / (1000 * 60);
     const timeStr = formatTime(time);
 
-    if (minutesUntil >= 20) {
+    // Same three-case logic as block-time.tsx:
+    //   ≥20 min in the future today → today
+    //   <20 min in the future today → slips to tomorrow (warning)
+    //   already past today          → natural next-day occurrence (no warning)
+    if (minutesUntilToday >= 20) {
       Toast.show({
         type: "success",
         text1: t("blockTime.startsToday", { time: timeStr }),
         visibilityTime: 4000,
       });
-    } else {
+    } else if (minutesUntilToday > 0) {
       Toast.show({
         type: "prominent",
-        text1: t("blockTime.startsTomorrow", { time: timeStr }),
+        text1: t("blockTime.startsTomorrowSoon", { time: timeStr }),
         visibilityTime: 10000,
         position: "top",
+      });
+    } else {
+      Toast.show({
+        type: "success",
+        text1: t("blockTime.startsTomorrow", { time: timeStr }),
+        visibilityTime: 4000,
       });
     }
   }

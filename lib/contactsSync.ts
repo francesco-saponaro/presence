@@ -163,6 +163,96 @@ export async function deleteContact(id: string): Promise<void> {
   })();
 }
 
+interface ContactRow {
+  id: string;
+  name: string;
+  how_known: string | null;
+  cares_about: string | null;
+  appreciate: string | null;
+  want_to_say: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface ThemeRowFull {
+  id: string;
+  contact_id: string;
+  theme_text: string;
+  keywords: string[] | null;
+  used_at: string | null;
+  created_at: string;
+}
+
+/**
+ * Fetch the signed-in user's contacts + themes from Supabase and replace the
+ * local Zustand store with the result. Call this on every SIGNED_IN event:
+ * it both heals stale local data after a cross-account sign-in (the
+ * previously-signed-in account's contacts get overwritten with the new
+ * account's, which may be empty) AND handles the cross-device case (new
+ * install pulls existing contacts).
+ *
+ * No-op when there's no session or when the network call fails — the local
+ * Zustand store is preserved in that case so users keep working offline.
+ */
+export async function pullContactsFromSupabase(): Promise<void> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data: contactRows, error: contactsErr } = await supabase
+      .from("contacts")
+      .select("id, name, how_known, cares_about, appreciate, want_to_say, created_at, updated_at")
+      .eq("user_id", user.id);
+
+    if (contactsErr) {
+      console.warn("[contactsSync] pull contacts failed:", contactsErr.message);
+      return;
+    }
+
+    const rows = (contactRows ?? []) as ContactRow[];
+
+    // Single batch query for all themes belonging to those contacts.
+    let themesByContact: Record<string, ThemeRowFull[]> = {};
+    if (rows.length > 0) {
+      const ids = rows.map((r) => r.id);
+      const { data: themeRows, error: themesErr } = await supabase
+        .from("contact_themes")
+        .select("id, contact_id, theme_text, keywords, used_at, created_at")
+        .in("contact_id", ids);
+      if (themesErr) {
+        console.warn("[contactsSync] pull themes failed:", themesErr.message);
+      } else {
+        for (const t of (themeRows ?? []) as ThemeRowFull[]) {
+          (themesByContact[t.contact_id] ??= []).push(t);
+        }
+      }
+    }
+
+    const contacts: Contact[] = rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      howKnown: row.how_known,
+      caresAbout: row.cares_about,
+      appreciate: row.appreciate,
+      wantToSay: row.want_to_say,
+      themes: (themesByContact[row.id] ?? []).map((t) => ({
+        id: t.id,
+        contactId: t.contact_id,
+        themeText: t.theme_text,
+        keywords: Array.isArray(t.keywords) ? t.keywords : [],
+        usedAt: t.used_at,
+        createdAt: t.created_at,
+      })),
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+
+    useContactsStore.getState().setContacts(contacts);
+  } catch (err) {
+    console.warn("[contactsSync] pull contacts threw:", err);
+  }
+}
+
 /**
  * Mark a theme as used (verified OCR match). Local Zustand is updated
  * immediately; Supabase UPDATE is fire-and-forget. The DB update is gated on

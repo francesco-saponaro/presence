@@ -135,18 +135,21 @@ export default function HomeScreen() {
     } else {
       incrementOcrFail();
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      // Tailored copy for the new thematic-relevance failure so the user
-      // understands what was missing instead of a generic "couldn't verify".
-      if (validation.reason === "no_theme_match" && validation.matchedContactName) {
-        Toast.show({
-          type: "error",
-          text1: t("shield.failureNoThemeTitle"),
-          text2: t("shield.failureNoThemeBody", { name: validation.matchedContactName }),
-          visibilityTime: 4500,
-        });
-      } else {
-        Toast.show({ type: "error", text1: t("shield.failure") });
-      }
+      // Tailored copy per failure reason — generic "couldn't verify" is too
+      // opaque when the user could fix it with a more specific tip.
+      const isNoContact = validation.reason === "no_contact_name";
+      Toast.show({
+        type: "error",
+        text1: isNoContact
+          ? t("shield.failureNoContactTitle")
+          : t("shield.failure"),
+        text2: isNoContact
+          ? t("shield.failureNoContactBody")
+          : __DEV__
+            ? `reason=${validation.reason ?? "unknown"}${validation.matchedContactName ? ", matched=" + validation.matchedContactName : ""}`
+            : undefined,
+        visibilityTime: isNoContact ? 5000 : __DEV__ ? 6000 : 3000,
+      });
     }
   }
 

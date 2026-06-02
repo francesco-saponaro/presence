@@ -3,21 +3,27 @@
  *
  * OCR validation logic for connection-proof screenshots.
  *
- * Five rules (all must pass):
- *   1. Effort       — more than 4 words of text exist in the screenshot.
- *   2. Context      — at least one messaging-app UI indicator is present.
- *   3. Recency      — a time reference suggesting the conversation is recent.
- *   4. Contact name — at least one trusted contact name appears in the text.
- *   5. Thematic     — when the matched contact has generated themes, at least
- *                     one of those themes must have a keyword that appears in
- *                     the text. Skipped when the contact has no themes (e.g.
- *                     a legacy contact or a previously-failed generation).
+ * Two STRICT rules (both must pass):
+ *   1. Effort       — more than 4 words of text exist in the screenshot
+ *                     (catches blank / single-word junk uploads).
+ *   2. Contact name — at least one trusted contact's name (exact spelling)
+ *                     appears in the OCR text. This is the anti-cheat gate.
  *
- * Rules 4 + 5 keep the user honest: they must screenshot a conversation with
- * a specific committed person AND touch on something we know matters to them.
+ * Two SOFT rules (informational; never fail verification):
+ *   • Time presence — any `HH:MM` time-shape appears in the text. Used as
+ *     a diagnostic signal but a missing time does NOT fail. We can't truly
+ *     verify "today vs yesterday" via OCR anyway (same time-shape either
+ *     way without a date marker), so we don't pretend to.
+ *   • Thematic match — keyword overlap against the matched contact's
+ *     themes. If any keyword hits, the strongest-scoring theme's `used_at`
+ *     advances (drives rotation). Zero matches → verification still passes,
+ *     no theme is credited for this connection. Keeps casual messages from
+ *     getting wrongly rejected.
  *
- * The matched contact's strongest-aligned theme is returned so the shield
- * engine can advance its `used_at` (Phase 4 rotation foundation).
+ * Removed in this iteration: the English-only "messaging-app UI" word
+ * check (send/message/etc.) and the multi-pattern recency check (today/
+ * yesterday/weekday names/12-h clock) — both were English-anchored and
+ * caused false negatives for users texting in other languages.
  *
  * After two consecutive failures the UI shows a "Manual bypass" option.
  */
@@ -31,10 +37,7 @@ export interface OCRValidationResult {
   reason?:
     | "no_text"
     | "low_effort"
-    | "no_context_or_recency"
-    | "no_recency"
     | "no_contact_name"
-    | "no_theme_match"
     | "ocr_error"
     | "unavailable";
   /** Raw OCR text (for debugging; not shown to user). */
@@ -48,48 +51,17 @@ export interface OCRValidationResult {
   matchedThemeId?: string;
 }
 
-// ── Rule 1: effort ───────────────────────────────────────────────────────────
+// ── Strict rule 1: effort ────────────────────────────────────────────────────
 
 const MIN_WORD_COUNT = 5;
 
-// ── Rule 2: context (messaging UI) ──────────────────────────────────────────
+// ── Soft signal: language-agnostic time presence (HH:MM in 24-h shape).
+//    Catches "11:42", "20:30", "08:15", etc. Used for diagnostics only; the
+//    absence of a time does NOT fail verification.
 
-const MESSAGING_SIGNALS = [
-  "send",
-  "sent",
-  "message",
-  "reply",
-  "delivered",
-  "read",
-  "type a message",
-  "imessage",
-  "whatsapp",
-  "messenger",
-  "telegram",
-  "signal",
-  "dm",
-  "chat",
-  "typing",
-  "online",
-  "seen",
-  "conversation",
-];
+const TIME_PATTERN = /\b([01]\d|2[0-3]):[0-5]\d\b/;
 
-// ── Rule 3: recency ───────────────────────────────────────────────────────────
-
-const RECENCY_PATTERNS: RegExp[] = [
-  /\bjust now\b/i,
-  /\bnow\b/i,
-  /\btoday\b/i,
-  /\bmin(ute)?s?\s?ago\b/i,
-  /\bhours?\s?ago\b/i,
-  /\b(1[0-2]|0?[1-9]):[0-5]\d\s?(am|pm)\b/i, // 12-h clock
-  /\b([01]\d|2[0-3]):[0-5]\d\b/, // 24-h clock
-  /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
-  /\byesterday\b/i,
-];
-
-// ── Rule 4: contact-name lookup ──────────────────────────────────────────────
+// ── Strict rule 2: contact-name lookup ───────────────────────────────────────
 
 /**
  * Find the trusted contact whose name appears in the OCR text. When multiple
@@ -107,7 +79,7 @@ function findMentionedContacts(
   });
 }
 
-// ── Rule 5: thematic relevance ───────────────────────────────────────────────
+// ── Soft signal: thematic relevance ──────────────────────────────────────────
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -199,56 +171,35 @@ export function validateOCRText(
   const lower = text.toLowerCase();
   const words = text.trim().split(/\s+/);
 
-  // Rule 1 – effort
+  // STRICT 1 – effort. Filters blank / one-line junk uploads.
   if (words.length < MIN_WORD_COUNT) {
     return { valid: false, reason: "low_effort", rawText: text };
   }
 
-  // Rule 2 – context
-  const hasContext = MESSAGING_SIGNALS.some((s) => lower.includes(s));
-
-  // Rule 3 – recency
-  const hasRecency = RECENCY_PATTERNS.some((re) => re.test(text));
-
-  // Permissive OR: 20+ words AND at least one of context/recency → accept.
-  const isLongConversation = words.length >= 20;
-
-  if (!hasContext && !hasRecency) {
-    return { valid: false, reason: "no_context_or_recency", rawText: text };
-  }
-  if (!hasRecency && !isLongConversation) {
-    return { valid: false, reason: "no_recency", rawText: text };
-  }
-
-  // Rule 4 – contact name. No configured contacts → permissive pass (caller
-  // handles the empty-contacts edge case at the routing level).
+  // STRICT 2 – contact name. No configured contacts → permissive pass
+  // (caller handles the empty-contacts edge case at the routing level).
   if (contacts.length === 0) {
     return { valid: true, rawText: text };
   }
-
   const mentioned = findMentionedContacts(lower, contacts);
   if (mentioned.length === 0) {
     return { valid: false, reason: "no_contact_name", rawText: text };
   }
 
-  // Rule 5 – thematic relevance.
-  const match = pickMatch(mentioned, lower);
-  if (!match) {
-    // Shouldn't happen given mentioned.length > 0, but defensive.
-    return { valid: false, reason: "no_contact_name", rawText: text };
+  // SOFT 1 – time presence (HH:MM). Diagnostic only; never fails.
+  if (__DEV__) {
+    const hasTime = TIME_PATTERN.test(text);
+    console.log("[OCR] time present:", hasTime);
   }
 
-  const contactHasThemes = match.contact.themes.length > 0;
-  const themeMatched = match.theme !== null;
-
-  if (contactHasThemes && !themeMatched) {
-    return {
-      valid: false,
-      reason: "no_theme_match",
-      rawText: text,
-      matchedContactId: match.contact.id,
-      matchedContactName: match.contact.name,
-    };
+  // SOFT 2 – thematic match. Score themes for rotation credit, but never
+  // fail on a zero-match. The strongest-scoring theme (if any) advances
+  // its used_at; otherwise no theme is credited for this connection.
+  const match = pickMatch(mentioned, lower);
+  if (!match) {
+    // Defensive — pickMatch only returns null when mentioned.length === 0,
+    // which we already guarded against above.
+    return { valid: false, reason: "no_contact_name", rawText: text };
   }
 
   return {
@@ -271,9 +222,34 @@ export async function runOCRValidation(
   contacts: Contact[] = [],
 ): Promise<OCRValidationResult> {
   try {
-    const text = await OCRModule.recognizeText(imagePath);
-    return validateOCRText(text, contacts);
-  } catch {
+    // The native iOS module uses UIImage(contentsOfFile:), which needs a bare
+    // filesystem path. expo-image-picker hands us a "file:///var/mobile/..."
+    // URL — strip the prefix before bridging so the native side can open it.
+    const nativePath = imagePath.startsWith("file://")
+      ? decodeURIComponent(imagePath.replace(/^file:\/\//, ""))
+      : imagePath;
+    if (__DEV__) console.log("[OCR] running recognizeText on:", nativePath);
+    const text = await OCRModule.recognizeText(nativePath);
+    if (__DEV__) {
+      console.log("[OCR] raw text length:", text?.length ?? 0);
+      console.log("[OCR] raw text preview:", text?.slice?.(0, 300));
+      console.log("[OCR] contacts available:", contacts.map((c) => ({
+        name: c.name,
+        themeCount: c.themes?.length ?? 0,
+      })));
+    }
+    const result = validateOCRText(text, contacts);
+    if (__DEV__) {
+      console.log("[OCR] validation result:", {
+        valid: result.valid,
+        reason: result.reason,
+        matchedContact: result.matchedContactName,
+        matchedThemeId: result.matchedThemeId,
+      });
+    }
+    return result;
+  } catch (err) {
+    if (__DEV__) console.warn("[OCR] native recognizeText threw:", err);
     return { valid: false, reason: "ocr_error" };
   }
 }

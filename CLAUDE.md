@@ -26,6 +26,7 @@
 - **i18n:** `react-i18next` natively supporting English (en), Spanish (es), French (fr), Italian (it), and Portuguese (pt).
 - **App Rating:** `expo-store-review` (For strategic App Store rating prompts).
 - **Transactional Emails:** Resend (for welcome emails upon payment and feedback/contact routing).
+- **AI (server-side only):** OpenAI (`gpt-4o-mini`, JSON mode) — used exclusively from the `generate-themes` Supabase Edge Function to write personalised conversation prompts per contact (see §6E). The client never holds the API key.
 - **System UI (Android):** `expo-navigation-bar` and `expo-status-bar` (To control translucency and colors).
 - **Safe Areas:** `react-native-safe-area-context` (Crucial for handling Android bottom insets).
 
@@ -155,12 +156,12 @@ All post-auth navigation is centralised in two places — never scatter `router.
 
 - **Tab 1 (Home):** Status indicator (Blocked/Unblocked). Countdown budget. Big "Upload Connection Proof" button when blocked.
 - **Tab 2 (Analytics):** Genuine Connections Made, Current Streak, Time Reclaimed. Warm empty state illustration if stats are 0.
-- **Tab 3 (Profile):** Routine section has three rows: **Schedule** (block time + frequency combined, navigates to `app/block-time.tsx`), **Blocked Apps** (navigates to `app/blocked-apps.tsx`), **Trusted Contacts** (opens `BottomSheetModal`). Language picker, Feedback/Contact button, Terms/Privacy links, Log Out/Delete Account.
+- **Tab 3 (Profile):** Routine section has three rows: **Schedule** (block time + frequency combined, navigates to `app/block-time.tsx`), **Blocked Apps** (navigates to `app/blocked-apps.tsx`), **Trusted Contacts** (navigates to `app/contacts.tsx`). Language picker, Feedback/Contact button, Terms/Privacy links, Log Out/Delete Account.
   - **Schedule row** shows the current time and frequency as a combined value (e.g. "8:00 PM · Daily"). Navigating to `app/block-time.tsx` gives a full-screen settings page (no onboarding UI) with the same time card + frequency pills; tapping Save updates the store and syncs to Supabase.
   - **Blocked Apps row** navigates to `app/blocked-apps.tsx` — same iOS picker / Android checkbox flow as onboarding but as a standalone settings page. Save updates the store and syncs to Supabase.
   - **CRITICAL:** Profile never navigates into `(onboarding)` routes for post-onboarding users. Always use the dedicated settings pages.
-  - Both `app/block-time.tsx` and `app/blocked-apps.tsx` are registered as root-level `<Stack.Screen>` entries in `app/_layout.tsx` so they slide in from the right as a standard push navigation.
-  - **Trusted Contacts** opens a `BottomSheetModal` (`snapPoints: ["70%"]`) where contacts can be added (text input) or removed (×). Every change is immediately written to Zustand and synced to Supabase via `syncContactsToSupabase()`.
+  - All three settings pages (`app/block-time.tsx`, `app/blocked-apps.tsx`, `app/contacts.tsx`) are registered as root-level `<Stack.Screen>` entries in `app/_layout.tsx` so they slide in from the right as a standard push navigation.
+  - **Trusted Contacts** is a full-screen page (`app/contacts.tsx`) listing each contact as a tappable card. Tap → opens `ContactEditorSheet`. Add → opens `ContactQuestionsSheet`. See §6E for the full architecture.
 - **Footer:** Must include Copyright info, Logo, and "Manage Subscription" (RevenueCat customer portal).
 
 ### D. The Core Engine (Native OCR & Shield)
@@ -192,35 +193,96 @@ All post-auth navigation is centralised in two places — never scatter `router.
 - **The Proof:** `expo-image-picker` passes the screenshot to the native modules.
   - **iOS:** Uses Apple `VNRecognizeTextRequest`.
   - **Android:** Uses Google `ML Kit Vision` API.
-- **Validation Rules** (all implemented in `lib/ocr.ts → validateOCRText(text, trustedContacts)`):
-  1. _Effort:_ Text block > 4 words.
-  2. _Context:_ At least one messaging-app UI indicator present (bubbles, "Send", "Message", app names, etc.).
-  3. _Recency:_ Timestamp indicates today or recent ("Today", current time, day name).
-  4. _Contact name:_ At least one name from `trustedContacts` appears (case-insensitive) in the OCR text. **This is the key rule** — it enforces that the screenshot is from a conversation with one of the specific people the user committed to. Skipped if `trustedContacts` is empty (e.g. legacy users).
+- **Validation Rules** (all implemented in `lib/ocr.ts → validateOCRText(text, contacts: Contact[])`). Two strict gates only; two informational soft signals:
+  1. _Effort (STRICT):_ Text block > 4 words. Catches blank / one-line / OCR-failed uploads. Fails with `low_effort`.
+  2. _Contact name (STRICT GATE — the anti-cheat rule):_ At least one trusted contact's `name` appears (case-insensitive substring) in the OCR text. Skipped if `contacts` is empty. Fails with `no_contact_name` and the toast names the gate explicitly ("We couldn't read a trusted contact's name. Make sure their name appears in the conversation — spelled exactly as you saved it in your messaging app.").
+  3. _Time presence (SOFT signal — diagnostic only):_ A `HH:MM` 24-hour time-shape appears in the OCR text (the language-agnostic regex `/\b([01]\d|2[0-3]):[0-5]\d\b/`). Logged in dev. **Does NOT fail verification.** Rationale: OCR can't distinguish "today's 11:42" from "yesterday's 11:42" without a visible date marker, and the earlier multi-pattern recency check (`today` / `yesterday` / weekday names / `X mins ago` / 12-h clock) was English-only, which produced false negatives for users texting in other languages. We dropped both that multi-pattern check and the English-only `MESSAGING_SIGNALS` "context" check that used to require words like "send" / "message" / "delivered" in the OCR text. **Don't add them back.** The strict name gate plus the friction of going through the Manual Bypass after two fails is the actual anti-cheat layer.
+  4. _Thematic relevance (SOFT GATE — drives rotation, never fails):_ When the matched contact has generated themes, we score each theme by keyword overlap and pick the strongest. **A zero-keyword-match does NOT fail verification** — it just means no theme's `used_at` advances for this connection. The user still gets through on the name match alone. This is intentional: keyword matching is too fragile to act as a hard gate, but it's good enough to drive rotation credit. Anyone reading `lib/ocr.ts` who doesn't know this might "fix" it back to strict — don't.
+  - The validator returns `{ valid, reason?, matchedContactId?, matchedContactName?, matchedThemeId? }`. The `reason` union is `"no_text" | "low_effort" | "no_contact_name" | "ocr_error" | "unavailable"` — no recency / context reasons exist anymore. The IDs flow through `onConnectionVerified(wasBypass, { contactId, themeId })` into `connection_proofs` rows so analytics can attribute connections per person. `matchedThemeId` also triggers `markThemeUsedRemote(themeId)` which advances `used_at` locally + in Supabase.
   - **The Relief Valve (CRITICAL UX):** If the OCR fails to verify a screenshot _twice in a row_, the UI must present a "Manual Bypass" button. If the user clicks this, allow them through the Shield (unblock apps) but log the bypass in Supabase. Do not trap a paying user out of their phone due to a vision glitch.
-    -- **Result:** Success triggers haptics + unblocks Shield. Failure shows elegant toast ("We couldn't verify this connection...").
+    -- **Result:** Success triggers haptics + unblocks Shield. Failure shows an elegant toast — generic "We couldn't verify this connection..." for `low_effort` / `no_text` / `ocr_error`, and the tailored "We couldn't read a trusted contact's name. Make sure their name appears in the conversation — spelled exactly as you saved it in your messaging app." for `no_contact_name`.
+  - **iOS path fix (gotcha):** `runOCRValidation` strips the `file://` prefix and runs `decodeURIComponent` on the path before bridging to the native `OCRModule.recognizeText`. The Swift side uses `UIImage(contentsOfFile:)` which needs a bare filesystem path; `expo-image-picker` returns a `file:///var/mobile/...` URL. Without the strip, every OCR call throws "Could not load image at path" and the validator returns `ocr_error` instantly.
+
+### E. Contacts & Themes (Phase 8 — the relationships system)
+
+The whole relationships layer that drives reminders, OCR theme-tracking, and analytics. Designed around a per-person prompt pool that the AI writes and the user can edit.
+
+**Data model (Supabase):**
+- `contacts` — id, user_id, name, how_known, cares_about, appreciate, want_to_say, timestamps. Q1 (how_known) and Q2 (cares_about) are required at the UI level, optional in the DB so partial rows survive offline writes.
+- `contact_themes` — id, contact_id, user_id, theme_text, keywords[], used_at, created_at. `used_at IS NULL` = "still in rotation". `regenerateThemes` deletes only the `used_at IS NULL` rows and inserts a fresh batch, preserving history for analytics.
+- `connection_proofs` — gained `contact_id` and `theme_id` (both nullable FKs, `ON DELETE SET NULL`). Populated by `syncPendingConnections` so the audit trail says which person + prompt each proof satisfied.
+
+**The `{name}` placeholder convention (CRITICAL):**
+- The edge function writes theme text with the literal placeholder `{name}` where the contact's name should appear (e.g. `"ask {name} about his new job at the firm"`).
+- The client substitutes at render time via `composeThemeWithName(text, name)` / `capitaliseFirst` in `lib/contactsSync.ts`, or the wrapper `formatWarmupLine(contact, theme)` in `lib/contactRotation.ts` (capitalises + adds trailing period).
+- **Never** ask the AI to embed the actual name — it ruins reusability across rename/edit and breaks the soft-gate keyword check (the name itself shouldn't be a keyword).
+
+**Stores:**
+- `store/contacts.ts` — Zustand with `_hasHydrated` flag (avoids gotcha #19 race). Holds `contacts: Contact[]` where each Contact embeds its `themes: ContactTheme[]`. Setters: `upsertContact`, `patchContact`, `removeContact`, `setThemesForContact`, `markThemeUsed`, `clearAll`. The new-account branch in `_layout.tsx` calls `clearAll()` alongside `resetOnboarding()` / `clearUser()`.
+- The old `routines.trusted_contacts text[]` column was dropped — contacts are no longer a routine field.
+
+**Sync layer (`lib/contactsSync.ts`):**
+- `createContact(input)` — **awaits** the Supabase insert (not fire-and-forget) because the typical caller immediately follows with `regenerateThemes`, which reads the row back via the edge function.
+- `updateContact(id, patch)` — partial patch; only the changed fields are sent.
+- `deleteContact(id)` — local + remote (cascades themes).
+- `regenerateThemes(id)` — calls the `generate-themes` edge function, passes the current `i18n.language`, updates the local store with the returned themes, and re-bakes the warm-up notification body (since theme text may have changed). Throws on failure so callers can surface a toast.
+- `markThemeUsedRemote(themeId)` — local + Supabase UPDATE gated on `used_at IS NULL` so concurrent matches can't overwrite the first-use timestamp.
+- `composeThemeWithName` + `capitaliseFirst` — exported helpers, used outside `lib/contactRotation.ts` (which inlines its own to avoid a circular import).
+
+**Rotation library (`lib/contactRotation.ts`):**
+- `pickNextContact(contacts, pendingConnections)` — picks the contact with the oldest `lastConnectionAt` (never-connected wins). Tiebreak: createdAt.
+- `pickNextTheme(contact)` — unused themes first (sorted by createdAt), else oldest-used theme so the cycle keeps moving until a fresh regen lands.
+- `lastConnectionForContact(id, connections)` — reduces `useShieldStore.pendingConnections` (which now carries `contactId` per entry) to the most recent ISO.
+- `formatWarmupLine(contact, theme)` — composes `{name}`, capitalises, adds period. Used by notifications + analytics suggestion cards.
+
+**Sheets:**
+- `components/ui/ContactQuestionsSheet.tsx` — multi-step add flow (Q1 → Q2 → Q3 → Q4 → loading → preview/error). Q1 + Q2 required; Q3 + Q4 skippable.
+  - `opts.showPreview` — when true, after themes generate the sheet shows a celebratory "Beautiful." card with one composed theme. Used for the *first* contact of onboarding only.
+  - `opts.strictThemeGen` — when true (set by onboarding `step-6-contacts.tsx`), a theme-gen failure shows the prominent error toast + the error step's footer offers **Retry** / **Cancel**. Cancel calls `deleteContact(pendingContactId)` to remove the partially-created row, so the onboarding gate (`contacts.length >= 1`) stays at zero and the user can't advance with a theme-less contact. When false (profile add), the footer offers **Retry** / **Save without prompts** instead, letting the user keep the contact and retry regen later from the editor.
+  - Tracks `pendingContactId` in state so retries don't re-create the row (only the first attempt calls `createContact`).
+- `components/ui/ContactEditorSheet.tsx` — single-page edit form for an existing contact. Uses `BottomSheetScrollView` as the direct child of `BottomSheetModal` with `stickyHeaderIndices={[0]}` so the close × / title / trash row stays pinned. **Save** detects what actually changed: name-only → just `updateContact`; any answer change → `updateContact` + `regenerateThemes` with a "Refreshing prompts..." spinner. **Refresh** in the theme banner always closes the sheet on success (persists any unsaved edits first). The body lists every theme as a quote card via `formatWarmupLine`, with used themes muted to 60% opacity — gives the user a reference of what to write and a soft progress indicator.
+
+**Onboarding contact step (`app/(onboarding)/step-6-contacts.tsx`):**
+- Name input → `Keyboard.dismiss()` → `ContactQuestionsSheet.open(name, { showPreview, strictThemeGen: true })`. The first contact added (`contacts.length === 0` at open time) gets the celebration preview; subsequent contacts get a quiet success toast.
+- Continue gate: `contacts.length >= 1`. Because strict mode deletes partial rows on cancel, a user who only attempted (and abandoned) a theme-gen flow cannot advance.
+
+**Edge function `generate-themes` (see §7).**
+
+**Notifications integration:**
+- `lib/notifications.ts → scheduleWarmupNotification` calls `buildWarmupBody()` which runs the rotation and bakes a personalised line into the body at schedule time. Three-tier fallback: targeted (theme line) → name-only (contact has no themes) → generic (no contacts).
+- Re-bake triggers (because Expo notification bodies are static once scheduled): app start, schedule save, `onConnectionVerified` (the just-connected contact drops to the bottom of the rotation), `regenerateThemes` (new theme content), and **language change** (the listener in `_layout.tsx` that already mirrors language to the shield extension also reschedules the warm-up so the static template strings switch language too).
+
+**Analytics (`app/(tabs)/analytics.tsx`):**
+- Top stats row: connections | streak | time reclaimed (kept).
+- "Your circle" section: per-contact cards sorted oldest-`lastConnectionAt` first. Each card shows last-connection-ago (stale ≥ 7 days renders in tan bold as a soft nudge), themes-touched count (`themes.filter(t => t.usedAt !== null).length`), and a "Suggestion" callout with one composed unused-theme line — same string format the warm-up notification would use.
+- "Add a trusted contact in your profile..." empty state when `contacts.length === 0`.
 - **App Rating Strategy (CRITICAL):** Use `expo-store-review` to trigger the native App Store rating prompt. You must ONLY trigger this immediately after a successful OCR verification (while the user is in a high-dopamine state), and ONLY on the user's exactly 3rd lifetime successful connection. Do not spam them early on.
 
 ## 7. Backend & Services Integration
 
-- **Supabase:** Schema must track user profiles, connection proof successes (stats), and selected routines. See `supabase/schema.sql` for the full schema. Edge functions live in `supabase/functions/`. The `routines` table has a `trusted_contacts text[] not null default '{}'` column — run the migration on existing databases: `alter table public.routines add column if not exists trusted_contacts text[] not null default '{}';`
-- **`lib/routineSync.ts`:** Two helpers for writing routine data to Supabase: `syncRoutineToSupabase()` — full upsert of all routine fields (blockTime, frequency, apps, trustedContacts); `syncContactsToSupabase(contacts)` — targeted UPDATE of only `trusted_contacts`, falling back to a full upsert if no row exists yet. Call `syncContactsToSupabase` whenever contacts change (onboarding completion and profile edits).
+- **Supabase:** Schema must track user profiles, connection proof successes (stats), selected routines, **contacts** and **contact_themes**. See `supabase/schema.sql` for the full schema and the migration block at the bottom (idempotent, safe to re-run on dev DBs).
+- **`lib/routineSync.ts`:** `syncRoutineToSupabase()` — upserts blockTime, frequency, and blockedApps. Trusted contacts moved out of this file in Phase 8 — see `lib/contactsSync.ts` (§6E) for contact/theme CRUD.
 - **`store/routine.ts` fields:**
   - `blockTimeUtc: string | null` — UTC ISO string encoding the local block hour (use `getLocalBlockTime()` from `lib/timezone.ts` to convert back for display/pickers).
   - `frequency: "daily" | "5x" | "weekends" | null`
   - `blockedApps: string[]` — bundle IDs (iOS display / Supabase sync) or package names (Android blocking).
   - `familyActivitySelection: string | null` — **iOS only.** Base64-encoded `FamilyActivitySelection` from `FamilyActivityPicker`. When present, `shieldEngine` calls `applyShieldFromSelection(base64)` instead of `applyShield(bundleIds)`. Never set this on Android.
-  - `trustedContacts: string[]` — names for OCR validation and psychological commitment.
   - `scheduleSetAt: string | null` — ISO timestamp, reset on every time/frequency change (`setBlockTime`/`setFrequency`). Part of the block **baseline** (`max(scheduleSetAt, shield.lastConnectionAt)`): a block trigger before the baseline does not count, so reconfiguring never blocks retroactively. See the overnight-persistence model in §6D. (The companion `lastConnectionAt: string | null` lives in `store/shield.ts` and advances on every verified connection.)
 - **RevenueCat:** Handle paywall offerings, execute purchases, check entitlements. API keys are configured in `lib/purchases.ts`. The entitlement ID is `"premium"`. RevenueCat user is identified by Supabase user ID via `Purchases.logIn(userId)`.
-- **Edge Functions:** Four functions deployed via `supabase functions deploy <name>`:
+- **Edge Functions:** Five functions deployed via `supabase functions deploy <name>`:
   - `delete-account` — admin-deletes the auth user (cascades all DB rows).
   - `revenuecat-webhook` — syncs subscription status from RevenueCat server events. Requires `REVENUECAT_WEBHOOK_SECRET` secret.
   - `welcome-email` — **currently disabled** (removed from paywall `handlePurchaseSuccess`). The function file remains deployed for future use. Requires `RESEND_API_KEY` and `FROM_EMAIL` secrets when re-enabled.
   - `contact` — routes in-app feedback via Resend. Requires `RESEND_API_KEY`, `FROM_EMAIL`, `SUPPORT_EMAIL` secrets. Production patterns applied: (1) CORS headers + OPTIONS preflight so it works from any client; (2) graceful `{ skipped: true }` response when `RESEND_API_KEY` is not set, preventing 500s in staging; (3) `reply_to: senderEmail` so support can reply directly to the user from the inbox; (4) try/catch around body parsing with a proper 400 response on malformed input; (5) HTML body with `white-space:pre-wrap` so multiline messages render correctly.
+  - `generate-themes` — writes 6 personalised prompts per contact via OpenAI (`gpt-4o-mini`, JSON mode). Request body: `{ contact_id, language? }`. Verifies the caller JWT, reads the contact row, calls OpenAI with a strict system prompt, deletes the contact's existing `used_at IS NULL` themes, inserts the new batch with 15-20 keywords each, returns them. Requires `OPENAI_API_KEY` secret (`supabase secrets set OPENAI_API_KEY=sk-...`).
+    - **Language priority (CRITICAL — easy to get wrong):** the system prompt is a 3-step instruction: (1) detect the primary language of the Q1-Q4 answers; (2) write *all* themes and *all* keywords in that detected answer-language; (3) only if the answers are blank/nonsense, fall back to the client-passed app language. The first version of this prompt anchored too hard on app-language as default and produced Spanish themes for users typing English answers (which broke keyword matching — users text in the language they wrote answers in). Don't revert it.
+    - **Output format:** themes are short action phrases in lowercase infinitive form with a literal `{name}` placeholder (e.g. `"ask {name} how the new job at the firm is going"`). Keywords are 15-20 casual/colloquial tokens per theme — guidance + example in the prompt explains why formal vocabulary fails the match.
+    - **Server-side sanitiser:** strips banned media words (`meme`, `gif`, `sticker`, etc.) from both theme text and keyword arrays; drops any theme whose text contains a banned word. Belt-and-braces — the prompt also explicitly forbids meme/GIF/media suggestions (they're antithetical to the app's mission).
 - **Resend:** Set secrets in Supabase: `supabase secrets set RESEND_API_KEY=re_xxx FROM_EMAIL="Presence <hello@presence.app>" SUPPORT_EMAIL="support@presence.app"`
-- **Expo Notifications (local only):** Two notification types implemented in `lib/notifications.ts`. Bodies are localised via `i18n.t("notifications.*")` (baked in at schedule time, so they use the language active when scheduled — rescheduling on the next save / app start refreshes them):
-  1. **Warm-up:** Fires 15 min before block time. **Frequency-aware**: `daily` → one repeating `DAILY` trigger; `5x` → repeating `WEEKLY` triggers Mon–Fri; `weekends` → `WEEKLY` Sat/Sun (each weekday has its own `presence-warmup-<n>` id; the 15-min subtraction can shift the fire weekday across midnight). Re-scheduled by `initNotifications()` on app start, on save in `block-time.tsx`, and on onboarding completion in `step-7-paywall.tsx → handlePurchaseSuccess()` (the routine + notification permission are both resolved by then, so it won't prompt out of order). `cancelWarmupNotification()` clears the daily id + all 7 weekday ids.
+- **Expo Notifications (local only):** Two notification types implemented in `lib/notifications.ts`. Bodies are baked in at schedule time:
+  1. **Warm-up:** Fires 15 min before block time. **Frequency-aware**: `daily` → one repeating `DAILY` trigger; `5x` → repeating `WEEKLY` triggers Mon–Fri; `weekends` → `WEEKLY` Sat/Sun (each weekday has its own `presence-warmup-<n>` id; the 15-min subtraction can shift the fire weekday across midnight). `cancelWarmupNotification()` clears the daily id + all 7 weekday ids.
+     - **Dynamic per-contact body:** `buildWarmupBody()` runs the rotation (`pickNextContact` → `pickNextTheme` from `lib/contactRotation.ts`) and composes a personalised line via `formatWarmupLine(contact, theme)`. Three-tier fallback: targeted (`notifications.warmupBodyTargeted` with `{{line}}`) → name-only (`warmupBodyNoTheme` with `{{name}}` when contact has no themes) → generic (`warmupBody` when no contacts).
+     - **Re-bake triggers (FIVE — must keep all in sync):** body is static once scheduled, so it must be re-baked on every state change that affects rotation or language. (1) app start via `initNotifications()`; (2) schedule save in `block-time.tsx`; (3) `onConnectionVerified()` (the just-connected contact drops to the bottom of the rotation, so the next fire should target someone fresher); (4) `regenerateThemes()` success (new theme text); (5) `i18n.changeLanguage` event in `_layout.tsx` (the same listener that mirrors language to the shield extension — otherwise a user who scheduled in Italian and then switched to English would receive hybrid-language notifications with Italian template strings around an English theme line).
   2. **Inactivity:** Fires 48 h after last connection. Reset by `scheduleInactivityNotification()` in `onConnectionVerified()`.
 - **App Rating Strategy:** Use `expo-store-review` to trigger the native App Store rating prompt. **CRITICAL:** Only trigger this immediately after a successful OCR verification (the highest dopamine moment), and only do it on the user's 3rd lifetime successful connection to avoid spamming them early on.
 
@@ -387,14 +449,36 @@ These were discovered during development and must be respected:
    - The two-argument overrides of `ShieldConfigurationDataSource` take **`in category: ActivityCategory`** (from `ManagedSettings`), NOT `in context: DeviceActivityEvent.Name`. Using the wrong type compiles as a non-overriding method → "method does not override any method from its superclass". Do **not** `import DeviceActivity` here — `ActivityCategory` comes from `ManagedSettings`.
    - This is a recurring trap because the file is an `@bacons/apple-targets`-managed extension: if it's ever regenerated/scaffolded, re-apply the correct imports and signatures. The errors only surface at EAS compile time (Windows can't build iOS locally).
 
+21. **`BottomSheetModal` — fixed-height sheet with keyboard-aware inner scroll (the editor/questions pattern):**
+   - Default gorhom behaviour (`keyboardBehavior="extend"` or the unset default `"interactive"`) pushes the sheet UP when an input is focused. For a sheet that should stay anchored at its snap point while the inner `BottomSheetScrollView` handles keyboard avoidance natively, use this exact combo:
+     ```tsx
+     <BottomSheetModal
+       snapPoints={["100%"]}
+       topInset={Math.floor(screenHeight * 0.08)}  // or whatever top gap you want
+       enablePanDownToClose
+       enableOverDrag={false}
+       enableContentPanningGesture={false}
+       keyboardBlurBehavior="restore"
+       android_keyboardInputMode="adjustResize"
+     >
+       <BottomSheetScrollView stickyHeaderIndices={[0]}>...</BottomSheetScrollView>
+     </BottomSheetModal>
+     ```
+   - **Why each piece matters:** `snapPoints=["100%"]` + `topInset` together give the same visible height as the old `snapPoints=["92%"]` did, but `topInset` is a hard ceiling so the sheet can't be pushed past it. `enableOverDrag={false}` prevents pan-overshoot from drag gestures. `enableContentPanningGesture={false}` stops the scrollview from bubbling pan events into the sheet when the user scrolls past the top — without it, scrolling up at the top of the content visually drags the sheet upward.
+   - **No `keyboardBehavior` prop:** gorhom v5.2.9 TS types omit `"none"`, so omit the prop entirely. iOS native `ScrollView` (which `BottomSheetScrollView` extends) auto-scrolls focused inputs above the keyboard.
+   - **Sticky header content needs its own background colour** (e.g. `#EBE6DF` to match the sheet) — without it, scrolled content shows through.
+   - **Save button placement:** put it at the bottom of the scrollable content (iOS-Settings-form pattern), not pinned absolutely. Always reachable by scrolling, never occluded by the keyboard.
+   - **Direct child rule still applies (gotcha #13):** `BottomSheetScrollView` / `BottomSheetFlatList` must be the direct child of `BottomSheetModal` or gorhom can't measure height correctly. Don't wrap them in `BottomSheetView`.
+
 ## 11. Pre-Launch Checklist (Before App Store Submission)
 
 These items must be completed before submitting to App Store / Play Store:
 
 - [ ] **RevenueCat API keys:** Test keys set in `lib/purchases.ts`. Replace with production keys from the RevenueCat dashboard before submitting to stores.
 - [ ] **RevenueCat entitlement:** Verify the entitlement ID `"premium"` matches what's configured in the RevenueCat dashboard.
-- [ ] **Supabase Edge Functions deployed:** Run `supabase functions deploy` for all 4 functions.
-- [ ] **Supabase secrets set:** `RESEND_API_KEY`, `FROM_EMAIL`, `SUPPORT_EMAIL`, `REVENUECAT_WEBHOOK_SECRET`.
+- [ ] **Supabase Edge Functions deployed:** Run `supabase functions deploy` for all 5 functions (including `generate-themes`).
+- [ ] **Supabase secrets set:** `RESEND_API_KEY`, `FROM_EMAIL`, `SUPPORT_EMAIL`, `REVENUECAT_WEBHOOK_SECRET`, **`OPENAI_API_KEY`** (for `generate-themes`).
+- [ ] **Contacts + themes schema migration applied:** Run the migration block at the bottom of `supabase/schema.sql` (creates `contacts`, `contact_themes`, adds `contact_id` + `theme_id` to `connection_proofs`, drops `routines.trusted_contacts`). Idempotent; safe to re-run.
 - [ ] **RevenueCat webhook configured:** Point the RevenueCat webhook to `https://<project-ref>.supabase.co/functions/v1/revenuecat-webhook`.
 - [ ] **TOS/Privacy URLs:** Replace placeholder `https://presence.app/terms` and `https://presence.app/privacy` in `step-7-paywall.tsx` and `profile.tsx` with real hosted pages.
 - [ ] **Apple FamilyControls production approval:** Wait for Apple approval; enable capability in Apple Developer Portal; delete cached EAS provisioning profile.
@@ -403,7 +487,6 @@ These items must be completed before submitting to App Store / Play Store:
 - [ ] **Supabase OAuth providers:** Enable Apple and Google providers in Supabase `Auth > Providers`. No redirect URL configuration needed (native `signInWithIdToken` flow, no browser redirect).
 - [ ] **Google Sign-In client IDs:** Replace `PLACEHOLDER_WEB_CLIENT_ID` and `PLACEHOLDER_IOS_CLIENT_ID` in `lib/socialAuth.ts` and `app.json` with real values from Google Cloud Console (OAuth 2.0 Client IDs).
 - [ ] **Supabase URL/keys:** Verify `lib/supabase.ts` has the production Supabase project URL and anon key.
-- [ ] **Trusted contacts DB migration:** Run `alter table public.routines add column if not exists trusted_contacts text[] not null default '{}';` on the existing Supabase database before deploying.
 - [ ] **Replace placeholder image in step-4-how:** `step-4-how.tsx` uses `onboarding-1.png` as a boilerplate. Replace with a dedicated final asset.
 - [ ] **iOS blocked-apps picker requires EAS build:** The `PresencePicker` native module (`FamilyActivityPicker`) is compiled only during EAS builds. The "Choose Apps to Block" button in `step-5-apps.tsx` and `app/blocked-apps.tsx` will crash on a bare JS reload until a native build is installed. Always test blocked-app selection on an EAS development build.
 - [ ] **Re-enable the edit-lock while blocked (ANTI-CHEAT):** Set `EDIT_LOCK_WHILE_BLOCKED` back to `true` in both `app/block-time.tsx` and `app/blocked-apps.tsx`. It is temporarily `false` for pre-release testing so the schedule/blocked-apps can be changed while blocked — shipping it `false` lets users bypass the shield by editing their routine instead of verifying a connection (see §9.5).
@@ -421,3 +504,4 @@ These items must be completed before submitting to App Store / Play Store:
 - **[ ✅ DONE ] Phase 5: The Core Engine (Native Modules & Timezones)** — Write the Expo Config Plugins and native Swift/Kotlin bridges for Screen Time, UsageStats, and ML Kit/Vision OCR. Implement Timezone management (`date-fns`) for local vs UTC triggers.
 - **[ ✅ DONE ] Phase 6: The Main Dashboard & Offline Handling** — Build the Home, Analytics, and Profile tabs. Implement Graceful Offline Handling (cache OCR success locally and sync to Supabase when reconnected). Streak tracking. Language persistence.
 - **[ ✅ DONE ] Phase 7: Monetization, Notifications & Polish** — RevenueCat paywall (real purchase flow). `expo-notifications` local push (warm-up + inactivity). Supabase Edge Functions (delete-account, revenuecat-webhook, welcome-email, contact). AppState background listeners. `expo-store-review` on 3rd connection.
+- **[ ✅ DONE ] Phase 8: Relationships Overhaul** — Replaced the bare `trusted_contacts text[]` with a full person-centric system: new `contacts` + `contact_themes` tables, `generate-themes` OpenAI edge function (with answer-language detection + media-content bans), per-contact question flow in onboarding (with strict-mode partial-row deletion on failure), profile contact editor with sticky-header + theme list + refresh, soft thematic gate in OCR (name match is the only hard rule), rotation library driving dynamic warm-up notification bodies (re-baked on 5 triggers including language change), and a relationship-first analytics page with neglect nudges + per-contact suggestions. See §6E for the full architecture.

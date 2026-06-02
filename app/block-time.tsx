@@ -91,23 +91,36 @@ export default function BlockTimeScreen() {
     const now = new Date();
     const todayAtTime = new Date();
     todayAtTime.setHours(time.getHours(), time.getMinutes(), 0, 0);
-    const minutesUntil = (todayAtTime.getTime() - now.getTime()) / (1000 * 60);
+    const minutesUntilToday = (todayAtTime.getTime() - now.getTime()) / (1000 * 60);
     const timeStr = formatTime(time);
 
-    if (minutesUntil >= 20) {
+    // Three cases:
+    //   1. Today's instance is still in the future and ≥20 min away → fires today.
+    //   2. Today's instance is in the future but <20 min away → DeviceActivity
+    //      needs lead time, so it slips to tomorrow (show the warning).
+    //   3. Today's instance is already past → next occurrence is tomorrow
+    //      naturally (no warning, no urgency).
+    if (minutesUntilToday >= 20) {
       Toast.show({
         type: "success",
         text1: t("profile.scheduleSaved"),
         text2: t("blockTime.startsToday", { time: timeStr }),
         visibilityTime: 5000,
       });
-    } else {
+    } else if (minutesUntilToday > 0) {
       Toast.show({
         type: "prominent",
         text1: t("profile.scheduleSaved"),
-        text2: t("blockTime.startsTomorrow", { time: timeStr }),
+        text2: t("blockTime.startsTomorrowSoon", { time: timeStr }),
         visibilityTime: 10000,
         position: "top",
+      });
+    } else {
+      Toast.show({
+        type: "success",
+        text1: t("profile.scheduleSaved"),
+        text2: t("blockTime.startsTomorrow", { time: timeStr }),
+        visibilityTime: 5000,
       });
     }
   }

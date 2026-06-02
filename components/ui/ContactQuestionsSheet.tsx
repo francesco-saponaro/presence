@@ -7,8 +7,10 @@ import {
 } from "react";
 import {
   ActivityIndicator,
+  Keyboard,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import {
@@ -21,10 +23,12 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
+import Toast from "react-native-toast-message";
 import {
   capitaliseFirst,
   composeThemeWithName,
   createContact,
+  deleteContact,
   regenerateThemes,
 } from "@/lib/contactsSync";
 import type { ContactTheme } from "@/store/contacts";
@@ -37,8 +41,19 @@ export interface ContactQuestionsSheetRef {
    * @param opts.showPreview  When true, after themes generate the sheet shows
    *                          a celebration preview (used for the very first
    *                          contact of the onboarding flow).
+   * @param opts.strictThemeGen  When true, theme generation must succeed for
+   *                             the contact to be saved. Failure shows a
+   *                             prominent toast and offers Retry/Cancel —
+   *                             Cancel deletes the partially-created contact
+   *                             so the user can't advance past onboarding
+   *                             with a theme-less contact. When false
+   *                             (default, for profile add), the user can
+   *                             "Save without prompts" and retry later.
    */
-  open: (forName: string, opts?: { showPreview?: boolean }) => void;
+  open: (
+    forName: string,
+    opts?: { showPreview?: boolean; strictThemeGen?: boolean },
+  ) => void;
   close: () => void;
 }
 
@@ -54,6 +69,10 @@ interface SheetState {
   name: string;
   step: Step;
   showPreview: boolean;
+  strictThemeGen: boolean;
+  /** Set after createContact succeeds. Used so a retry skips re-creating the
+   *  row, and so Cancel can delete it in strict mode. */
+  pendingContactId: string | null;
   q1: string;
   q2: string;
   q3: string;
@@ -65,6 +84,8 @@ const INITIAL: SheetState = {
   name: "",
   step: "q1",
   showPreview: false,
+  strictThemeGen: false,
+  pendingContactId: null,
   q1: "",
   q2: "",
   q3: "",
@@ -85,6 +106,11 @@ export const ContactQuestionsSheet = forwardRef<ContactQuestionsSheetRef, Props>
   ({ onAdded }, ref) => {
     const { t } = useTranslation();
     const insets = useSafeAreaInsets();
+    const { height: screenHeight } = useWindowDimensions();
+    // 12% top gap (was "88%" snap). With snapPoints=["100%"] + this inset,
+    // the sheet fills (screen − 12%) — same visible size, hard top ceiling
+    // so the keyboard can't shove the sheet upward.
+    const sheetTopInset = Math.floor(screenHeight * 0.12);
     const modalRef = useRef<BottomSheetModal>(null);
     const [state, setState] = useState<SheetState>(INITIAL);
 
@@ -95,7 +121,12 @@ export const ContactQuestionsSheet = forwardRef<ContactQuestionsSheetRef, Props>
     useImperativeHandle(ref, () => ({
       open: (name, opts) => {
         submitIdRef.current += 1;
-        setState({ ...INITIAL, name, showPreview: !!opts?.showPreview });
+        setState({
+          ...INITIAL,
+          name,
+          showPreview: !!opts?.showPreview,
+          strictThemeGen: !!opts?.strictThemeGen,
+        });
         modalRef.current?.present();
       },
       close: () => modalRef.current?.dismiss(),
@@ -146,6 +177,10 @@ export const ContactQuestionsSheet = forwardRef<ContactQuestionsSheetRef, Props>
     }
 
     async function submit(opts?: { q4Override?: string }) {
+      // Drop the keyboard before flipping to the loading screen — otherwise
+      // the sheet stays sized for the open-keyboard layout and the centered
+      // spinner ends up cramped against the top of the visible area.
+      Keyboard.dismiss();
       const myId = ++submitIdRef.current;
       const snapshot = {
         name: state.name,
@@ -158,17 +193,23 @@ export const ContactQuestionsSheet = forwardRef<ContactQuestionsSheetRef, Props>
       setStep("loading");
 
       try {
-        const contact = await createContact({
-          name: snapshot.name,
-          howKnown: snapshot.q1,
-          caresAbout: snapshot.q2,
-          appreciate: snapshot.q3,
-          wantToSay: snapshot.q4,
-        });
+        // First submit creates the contact. Retries (state.pendingContactId
+        // already set) skip creation and re-run generation on the same row.
+        let contactId = state.pendingContactId;
+        if (!contactId) {
+          const contact = await createContact({
+            name: snapshot.name,
+            howKnown: snapshot.q1,
+            caresAbout: snapshot.q2,
+            appreciate: snapshot.q3,
+            wantToSay: snapshot.q4,
+          });
+          if (submitIdRef.current !== myId) return;
+          contactId = contact.id;
+          setState((s) => ({ ...s, pendingContactId: contactId }));
+        }
 
-        if (submitIdRef.current !== myId) return;
-
-        const themes = await regenerateThemes(contact.id);
+        const themes = await regenerateThemes(contactId);
 
         if (submitIdRef.current !== myId) return;
 
@@ -180,12 +221,32 @@ export const ContactQuestionsSheet = forwardRef<ContactQuestionsSheetRef, Props>
       } catch (err) {
         if (submitIdRef.current !== myId) return;
         console.warn("[ContactQuestionsSheet] theme generation failed:", err);
+        // Prominent failure toast so the user can't miss it, in addition to
+        // the in-sheet error UI.
+        Toast.show({
+          type: "prominent",
+          text1: t("onboarding.step6contacts.errorTitle"),
+          text2: t("onboarding.step6contacts.errorToastBody", { name: state.name }),
+          visibilityTime: 5000,
+          position: "top",
+        });
         setStep("error");
       }
     }
 
     function finishAndClose(themesReady: boolean) {
       onAdded?.(state.name, themesReady);
+      modalRef.current?.dismiss();
+    }
+
+    /** Strict-mode "Cancel" from the error step: delete the partially-created
+     *  contact so the onboarding gate stays at zero contacts and the user
+     *  can't advance with a theme-less row. */
+    function handleStrictCancel() {
+      submitIdRef.current += 1;
+      if (state.pendingContactId) {
+        deleteContact(state.pendingContactId).catch(() => {});
+      }
       modalRef.current?.dismiss();
     }
 
@@ -321,14 +382,27 @@ export const ContactQuestionsSheet = forwardRef<ContactQuestionsSheetRef, Props>
           );
         case "loading":
           return (
-            <View className="flex-1 items-center justify-center px-4">
-              <ActivityIndicator size="large" color="#705E46" />
-              <Text className="font-serif-display text-2xl text-text-dark text-center mt-6 mb-2">
+            <View className="flex-1 items-center justify-center px-6">
+              {/* Concentric sparkles disc — softer than a bare spinner and
+                  hints at "AI is writing" without being a generic loader. */}
+              <View
+                className="w-24 h-24 rounded-full items-center justify-center mb-8"
+                style={{ backgroundColor: "rgba(214,181,136,0.18)" }}
+              >
+                <View
+                  className="w-16 h-16 rounded-full items-center justify-center"
+                  style={{ backgroundColor: "rgba(214,181,136,0.4)" }}
+                >
+                  <Ionicons name="sparkles" size={28} color="#422701" />
+                </View>
+              </View>
+              <Text className="font-serif-display text-2xl text-text-dark text-center mb-3 leading-snug">
                 {t("onboarding.step6contacts.generatingTitle", { name: state.name })}
               </Text>
-              <Text className="font-sans-body text-sm text-brown-mid text-center">
+              <Text className="font-sans-body text-sm text-brown-mid text-center mb-8 leading-relaxed">
                 {t("onboarding.step6contacts.generatingBody")}
               </Text>
+              <ActivityIndicator color="#705E46" />
             </View>
           );
         case "preview": {
@@ -377,7 +451,9 @@ export const ContactQuestionsSheet = forwardRef<ContactQuestionsSheetRef, Props>
                 {t("onboarding.step6contacts.errorTitle")}
               </Text>
               <Text className="font-sans-body text-sm text-brown-mid text-center px-6">
-                {t("onboarding.step6contacts.errorBody", { name: state.name })}
+                {state.strictThemeGen
+                  ? t("onboarding.step6contacts.errorBodyStrict", { name: state.name })
+                  : t("onboarding.step6contacts.errorBody", { name: state.name })}
               </Text>
             </View>
           );
@@ -452,11 +528,19 @@ export const ContactQuestionsSheet = forwardRef<ContactQuestionsSheetRef, Props>
                 variant="primary"
                 onPress={() => void submit()}
               />
-              <PillButton
-                label={t("onboarding.step6contacts.errorSkip")}
-                variant="ghost"
-                onPress={() => finishAndClose(false)}
-              />
+              {state.strictThemeGen ? (
+                <PillButton
+                  label={t("onboarding.step6contacts.errorCancel")}
+                  variant="ghost"
+                  onPress={handleStrictCancel}
+                />
+              ) : (
+                <PillButton
+                  label={t("onboarding.step6contacts.errorSkip")}
+                  variant="ghost"
+                  onPress={() => finishAndClose(false)}
+                />
+              )}
             </View>
           );
       }
@@ -465,9 +549,11 @@ export const ContactQuestionsSheet = forwardRef<ContactQuestionsSheetRef, Props>
     return (
       <BottomSheetModal
         ref={modalRef}
-        snapPoints={["88%"]}
+        snapPoints={["100%"]}
+        topInset={sheetTopInset}
         enablePanDownToClose={state.step !== "loading"}
-        keyboardBehavior="extend"
+        enableOverDrag={false}
+        enableContentPanningGesture={false}
         keyboardBlurBehavior="restore"
         android_keyboardInputMode="adjustResize"
         backdropComponent={renderBackdrop}

@@ -30,6 +30,12 @@ const HOW_STEPS = [
     descKey: "step3Desc",
     icon: "camera-outline",
   },
+  {
+    number: "4",
+    titleKey: "step4Title",
+    descKey: "step4Desc",
+    icon: "lock-open-outline",
+  },
 ] as const;
 
 export default function Step4How() {

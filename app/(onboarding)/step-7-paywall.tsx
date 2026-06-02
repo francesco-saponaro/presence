@@ -70,20 +70,26 @@ export default function Step7Paywall() {
       scheduleWarmupNotification(blockTimeUtc, frequency).catch(() => {});
     }
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      await supabase
-        .from("profiles")
-        .update({
-          is_subscribed: true,
-          subscription_expires_at: expiresAt,
-        })
-        .eq("id", user.id);
-
-      // Persist all routine data (block time, frequency, apps, contacts) collected
-      // during onboarding to Supabase now that we have a confirmed user.
+    // Fire-and-forget the Supabase mirror writes. Local Zustand state already
+    // reflects the purchase, and the RevenueCat webhook also syncs subscription
+    // state server-side, so awaiting these here only adds dead time between
+    // the StoreKit modal closing and the redirect to /(tabs).
+    void (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      try {
+        await supabase
+          .from("profiles")
+          .update({
+            is_subscribed: true,
+            subscription_expires_at: expiresAt,
+          })
+          .eq("id", user.id);
+      } catch {
+        // Best-effort — webhook will still mirror on the server side.
+      }
       syncRoutineToSupabase().catch(() => {});
-    }
+    })();
 
     router.replace("/(tabs)");
   }
@@ -225,17 +231,19 @@ export default function Step7Paywall() {
         style={{ paddingBottom: Math.max(insets.bottom, 24) }}
       >
         <PillButton
-          label={isLoading && purchasing ? t("common.loading") : t("onboarding.step7.cta")}
+          label={purchasing ? t("common.loading") : t("onboarding.step7.cta")}
           variant="secondary"
           onPress={handleSubscribe}
           disabled={isLoading || loadingOffering || !pkg}
+          loading={purchasing}
         />
 
         <PillButton
-          label={isLoading && restoring ? t("common.loading") : t("onboarding.step7.restore")}
+          label={restoring ? t("common.loading") : t("onboarding.step7.restore")}
           variant="ghost"
           onPress={handleRestore}
           disabled={isLoading}
+          loading={restoring}
         />
 
         <Text className="font-sans-body text-xs text-brown-mid text-center">

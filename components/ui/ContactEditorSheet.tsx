@@ -10,6 +10,7 @@ import {
   Alert,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import {
@@ -18,7 +19,6 @@ import {
   BottomSheetModal,
   BottomSheetScrollView,
   BottomSheetTextInput,
-  BottomSheetView,
 } from "@gorhom/bottom-sheet";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -29,6 +29,7 @@ import {
   regenerateThemes,
   updateContact,
 } from "@/lib/contactsSync";
+import { formatWarmupLine } from "@/lib/contactRotation";
 import { useContactsStore, type Contact } from "@/store/contacts";
 import { PillButton } from "./PillButton";
 
@@ -97,6 +98,13 @@ export const ContactEditorSheet = forwardRef<ContactEditorSheetRef, Props>(
   ({ totalContacts }, ref) => {
     const { t } = useTranslation();
     const insets = useSafeAreaInsets();
+    const { height: screenHeight } = useWindowDimensions();
+    // Hard ceiling: 8% of screen from the top. With snapPoints=["100%"], the
+    // sheet fills (screen − topInset), giving the same visible size as the
+    // old "92%" snap point. With this ceiling, keyboardBehavior can't push
+    // the sheet any higher — the inner BottomSheetScrollView handles the
+    // focused input natively instead.
+    const sheetTopInset = Math.floor(screenHeight * 0.08);
     const modalRef = useRef<BottomSheetModal>(null);
     const [form, setForm] = useState<FormState>(EMPTY);
 
@@ -233,8 +241,10 @@ export const ContactEditorSheet = forwardRef<ContactEditorSheetRef, Props>(
         });
         return;
       }
-      // If the user edited answers but hasn't saved them yet, persist first
-      // so regenerate uses the latest text.
+      // Refresh persists any unsaved edits before regenerating so the new
+      // themes are based on the latest answers. Since both writes happen
+      // here, the sheet is fully "saved" on success and we always dismiss —
+      // no Save button to tap afterwards.
       if (answersChanged() || nameChanged()) {
         setForm((f) => ({ ...f, saving: true }));
         try {
@@ -258,6 +268,7 @@ export const ContactEditorSheet = forwardRef<ContactEditorSheetRef, Props>(
           text1: t("profile.contactEditor.regenerateSuccess"),
           visibilityTime: 2500,
         });
+        modalRef.current?.dismiss();
       } catch (err) {
         console.warn("[ContactEditorSheet] regenerate failed:", err);
         Toast.show({
@@ -300,54 +311,65 @@ export const ContactEditorSheet = forwardRef<ContactEditorSheetRef, Props>(
     return (
       <BottomSheetModal
         ref={modalRef}
-        snapPoints={["92%"]}
+        snapPoints={["100%"]}
+        topInset={sheetTopInset}
         enablePanDownToClose={!busy}
-        keyboardBehavior="extend"
+        enableOverDrag={false}
+        enableContentPanningGesture={false}
         keyboardBlurBehavior="restore"
         android_keyboardInputMode="adjustResize"
         backdropComponent={renderBackdrop}
         backgroundStyle={{ backgroundColor: "#EBE6DF" }}
         handleIndicatorStyle={{ backgroundColor: "#C6C0B9" }}
       >
-        <BottomSheetView
-          style={{
-            flex: 1,
-            paddingHorizontal: 24,
-            paddingTop: 4,
-            paddingBottom: Math.max(insets.bottom, 16) + 8,
+        {/* BottomSheetScrollView is the direct child (gorhom gotcha #13).
+            Index 0 is made sticky so the close-×/title/trash row stays
+            pinned at the top while the form scrolls underneath. */}
+        <BottomSheetScrollView
+          style={{ flex: 1 }}
+          keyboardShouldPersistTaps="handled"
+          stickyHeaderIndices={[0]}
+          contentContainerStyle={{
+            paddingBottom: Math.max(insets.bottom, 16) + 64,
           }}
         >
-          {/* Header */}
-          <View className="flex-row items-center mb-3">
-            <TouchableOpacity
-              onPress={() => modalRef.current?.dismiss()}
-              hitSlop={8}
-              activeOpacity={0.6}
-              disabled={busy}
-            >
-              <Ionicons name="close" size={22} color="#705E46" />
-            </TouchableOpacity>
-            <View className="flex-1 items-center">
-              <Text className="font-serif-display text-lg text-text-dark">
-                {t("profile.contactEditor.title")}
-              </Text>
+          {/* Sticky header — must paint its own background so scrolled
+              content doesn't bleed through it. */}
+          <View
+            style={{
+              backgroundColor: "#EBE6DF",
+              paddingHorizontal: 24,
+              paddingTop: 8,
+              paddingBottom: 12,
+            }}
+          >
+            <View className="flex-row items-center">
+              <TouchableOpacity
+                onPress={() => modalRef.current?.dismiss()}
+                hitSlop={8}
+                activeOpacity={0.6}
+                disabled={busy}
+              >
+                <Ionicons name="close" size={22} color="#705E46" />
+              </TouchableOpacity>
+              <View className="flex-1 items-center">
+                <Text className="font-serif-display text-lg text-text-dark">
+                  {t("profile.contactEditor.title")}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={handleDelete}
+                hitSlop={8}
+                activeOpacity={0.6}
+                disabled={busy}
+              >
+                <Ionicons name="trash-outline" size={20} color="#705E46" />
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity
-              onPress={handleDelete}
-              hitSlop={8}
-              activeOpacity={0.6}
-              disabled={busy}
-            >
-              <Ionicons name="trash-outline" size={20} color="#705E46" />
-            </TouchableOpacity>
           </View>
 
-          {/* Scrollable form */}
-          <BottomSheetScrollView
-            style={{ flex: 1 }}
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ paddingBottom: 16 }}
-          >
+          {/* Scrollable form body */}
+          <View style={{ paddingHorizontal: 24, paddingTop: 4 }}>
             {/* Avatar + name pill */}
             <View className="items-center mb-5">
               <View
@@ -436,57 +458,95 @@ export const ContactEditorSheet = forwardRef<ContactEditorSheetRef, Props>(
               style={inputStyle(true)}
             />
 
-            {/* Theme status + manual refresh */}
-            <View
-              className="mt-2 mb-1 px-4 py-3 rounded-2xl flex-row items-center"
-              style={{ backgroundColor: "rgba(214,181,136,0.15)" }}
-            >
-              <Ionicons name="sparkles" size={16} color="#422701" />
-              <Text className="flex-1 font-sans-medium text-sm text-brown-dark ml-2">
-                {themeCount > 0
-                  ? t("profile.contactEditor.themesStatusReady", { count: themeCount })
-                  : t("profile.contactEditor.themesStatusEmpty")}
-              </Text>
-              <TouchableOpacity
-                onPress={handleRegenerateOnly}
-                disabled={busy}
-                activeOpacity={0.7}
-                hitSlop={6}
-              >
-                <Text
-                  className={`font-sans-medium text-sm underline ${busy ? "text-greige" : "text-brown-mid"}`}
+            {/* Themes section — list each prompt so the user has a reference
+                of what to write. Used prompts get a muted treatment so the
+                history stays visible without competing with the live pool. */}
+            <View className="mt-4 mb-1">
+              <View className="flex-row items-center mb-3">
+                <Ionicons name="sparkles" size={16} color="#422701" />
+                <Text className="flex-1 font-sans-medium text-sm text-brown-dark ml-2">
+                  {themeCount > 0
+                    ? t("profile.contactEditor.themesStatusReady", { count: themeCount })
+                    : t("profile.contactEditor.themesStatusEmpty")}
+                </Text>
+                <TouchableOpacity
+                  onPress={handleRegenerateOnly}
+                  disabled={busy}
+                  activeOpacity={0.7}
+                  hitSlop={6}
                 >
-                  {form.regenerating
-                    ? t("profile.contactEditor.regenerating")
-                    : t("profile.contactEditor.regenerateCta")}
-                </Text>
-              </TouchableOpacity>
-            </View>
-            <Text className="font-sans-body text-[11px] text-greige mt-1 mb-2 px-1">
-              {t("profile.contactEditor.regenerateHint")}
-            </Text>
-          </BottomSheetScrollView>
-
-          {/* Footer */}
-          <View className="pt-3">
-            {busy ? (
-              <View className="flex-row items-center justify-center py-4 gap-2">
-                <ActivityIndicator color="#705E46" />
-                <Text className="font-sans-medium text-sm text-brown-mid">
-                  {form.regenerating
-                    ? t("profile.contactEditor.regenerating")
-                    : t("profile.contactEditor.saving")}
-                </Text>
+                  <Text
+                    className={`font-sans-medium text-sm underline ${busy ? "text-greige" : "text-brown-mid"}`}
+                  >
+                    {form.regenerating
+                      ? t("profile.contactEditor.regenerating")
+                      : t("profile.contactEditor.regenerateCta")}
+                  </Text>
+                </TouchableOpacity>
               </View>
-            ) : (
-              <PillButton
-                label={t("profile.contactEditor.save")}
-                variant="primary"
-                onPress={handleSave}
-              />
-            )}
+
+              {liveContact && liveContact.themes.length > 0 && (
+                <>
+                  <Text className="font-sans-body text-xs text-brown-mid leading-relaxed mb-3 px-1">
+                    {t("profile.contactEditor.themesIntro")}
+                  </Text>
+                  <View className="gap-2">
+                    {liveContact.themes.map((theme) => {
+                    const used = theme.usedAt !== null;
+                    const line = formatWarmupLine(liveContact, theme);
+                    return (
+                      <View
+                        key={theme.id}
+                        className="rounded-xl px-3 py-2.5 flex-row items-start"
+                        style={{
+                          backgroundColor: used
+                            ? "rgba(198,192,185,0.18)"
+                            : "rgba(214,181,136,0.18)",
+                          opacity: used ? 0.6 : 1,
+                        }}
+                      >
+                        <Ionicons
+                          name={used ? "checkmark-circle" : "sparkles-outline"}
+                          size={14}
+                          color={used ? "#705E46" : "#422701"}
+                          style={{ marginTop: 2 }}
+                        />
+                        <Text
+                          className={`flex-1 ml-2 font-serif-display text-sm leading-snug ${used ? "text-brown-mid" : "text-brown-dark"}`}
+                        >
+                          {`"${line}"`}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                  </View>
+                </>
+              )}
+            </View>
+
+            {/* Save / loading lives at the bottom of the scrollable content.
+                Scrolling to the end always reveals it; the sticky header
+                stays in view above. */}
+            <View className="mt-6">
+              {busy ? (
+                <View className="flex-row items-center justify-center py-4 gap-2">
+                  <ActivityIndicator color="#705E46" />
+                  <Text className="font-sans-medium text-sm text-brown-mid">
+                    {form.regenerating
+                      ? t("profile.contactEditor.regenerating")
+                      : t("profile.contactEditor.saving")}
+                  </Text>
+                </View>
+              ) : (
+                <PillButton
+                  label={t("profile.contactEditor.save")}
+                  variant="primary"
+                  onPress={handleSave}
+                />
+              )}
+            </View>
           </View>
-        </BottomSheetView>
+        </BottomSheetScrollView>
       </BottomSheetModal>
     );
   },

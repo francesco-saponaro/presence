@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   KeyboardAvoidingView,
+  Keyboard,
   Platform,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -43,9 +44,13 @@ export default function Step6Contacts() {
       });
       return;
     }
+    // Dismiss the name-input keyboard so it doesn't cover the questions sheet.
+    Keyboard.dismiss();
     // First-contact-of-this-onboarding gets the celebratory theme preview.
     const showPreview = contacts.length === 0;
-    sheetRef.current?.open(name, { showPreview });
+    // Onboarding can't be advanced with a theme-less contact: if theme
+    // generation fails the partially-created row gets deleted on Cancel.
+    sheetRef.current?.open(name, { showPreview, strictThemeGen: true });
     setInputValue("");
   }
 
@@ -126,6 +131,25 @@ export default function Step6Contacts() {
             <Text className="font-sans-body text-xs text-brown-dark dark:text-tan leading-relaxed">
               {t("onboarding.step6contacts.ocrNote")}
             </Text>
+          </View>
+
+          {/* Prominent name-match warning — the spelling rule is easy to miss
+              and breaks verification when wrong, so it gets its own boxed-out
+              callout with an icon and bolder text on both this screen and the
+              profile /contacts page. */}
+          <View
+            className="mx-6 mb-4 rounded-2xl px-4 py-4 flex-row items-start"
+            style={{ backgroundColor: "#422701" }}
+          >
+            <Ionicons name="information-circle" size={22} color="#FDFBF7" />
+            <View className="flex-1 ml-3">
+              <Text className="font-sans-bold text-sm text-text-light mb-1">
+                {t("common.nameMatchWarningTitle")}
+              </Text>
+              <Text className="font-sans-medium text-sm text-text-light leading-relaxed">
+                {t("common.nameMatchWarning")}
+              </Text>
+            </View>
           </View>
 
           {/* Secondary hint — can change later */}

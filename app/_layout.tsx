@@ -2,7 +2,8 @@ import { toastConfig } from "@/components/toastConfig";
 import i18n from "@/i18n";
 import { routeAfterAuth } from "@/lib/authRouting";
 import * as Notifications from "expo-notifications";
-import { initNotifications } from "@/lib/notifications";
+import { pullContactsFromSupabase } from "@/lib/contactsSync";
+import { initNotifications, scheduleWarmupNotification } from "@/lib/notifications";
 import {
   checkEntitlement,
   configurePurchases,
@@ -16,6 +17,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/store/auth";
 import { useContactsStore } from "@/store/contacts";
 import { useOnboardingStore } from "@/store/onboardingStore";
+import { useRoutineStore } from "@/store/routine";
 import { useUserStore } from "@/store/userStore";
 import {
   DMSans_400Regular,
@@ -100,14 +102,24 @@ export default function RootLayout() {
   // ShieldConfiguration extension can localise the shield overlay. Writes on
   // mount and on every language change (i18n.changeLanguage fires this event,
   // including the hydration-driven restore above and manual picker changes).
+  //
+  // Also re-bake the warm-up notification body on language change. Expo
+  // local-notification bodies are baked in at schedule time, so a notification
+  // scheduled while the app was in Italian keeps its Italian template strings
+  // even after the user switches the app to another language. Re-scheduling
+  // here picks up the new locale's strings (and a freshly-composed theme line).
   useEffect(() => {
-    const writeLang = (lng: string) => {
+    const onLanguageChange = (lng: string) => {
       ScreenTimeModule.setAppLanguage(lng).catch(() => {});
+      const { blockTimeUtc, frequency } = useRoutineStore.getState();
+      if (blockTimeUtc && frequency) {
+        scheduleWarmupNotification(blockTimeUtc, frequency).catch(() => {});
+      }
     };
-    writeLang(i18n.language);
-    i18n.on("languageChanged", writeLang);
+    onLanguageChange(i18n.language);
+    i18n.on("languageChanged", onLanguageChange);
     return () => {
-      i18n.off("languageChanged", writeLang);
+      i18n.off("languageChanged", onLanguageChange);
     };
   }, []);
 
@@ -183,6 +195,18 @@ export default function RootLayout() {
               useUserStore.getState().setSubscribed(true, expiresAt);
           }),
         );
+
+        // Replace local contacts with the server's truth for this user.
+        // Self-heals two cases the isDifferentUser branch above can't catch:
+        // (1) original-account → SIGNED_OUT (clears userId to null) → other
+        //     account signs in → original signs back in. storedId is null at
+        //     each step, so isDifferentUser stays false and clearAll() never
+        //     fires; the previous account's contacts would otherwise leak.
+        // (2) cross-device sync (new install or fresh sign-in on a second
+        //     phone) — pulls existing contacts from Supabase.
+        // Fire-and-forget so routing isn't blocked. Local store is preserved
+        // if the call fails (offline / network error).
+        pullContactsFromSupabase().catch(() => {});
       }
 
       // SIGNED_IN covers email, Apple, and Google auth — route to the
