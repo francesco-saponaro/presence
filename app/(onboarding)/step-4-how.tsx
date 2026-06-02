@@ -11,7 +11,18 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 
-const HOW_STEPS = [
+interface HowStep {
+  number: string;
+  titleKey: string;
+  descKey: string;
+  /** Optional emphasised tagline below the description. Used on the Connect
+   *  step to surface the AI personalised-prompts feature — it's the app's
+   *  biggest differentiator and was previously buried in the desc string. */
+  taglineKey?: string;
+  icon: string;
+}
+
+const HOW_STEPS: HowStep[] = [
   {
     number: "1",
     titleKey: "step1Title",
@@ -22,6 +33,7 @@ const HOW_STEPS = [
     number: "2",
     titleKey: "step2Title",
     descKey: "step2Desc",
+    taglineKey: "step2DescHighlight",
     icon: "chatbubble-ellipses-outline",
   },
   {
@@ -36,7 +48,7 @@ const HOW_STEPS = [
     descKey: "step4Desc",
     icon: "lock-open-outline",
   },
-] as const;
+];
 
 export default function Step4How() {
   const { t } = useTranslation();
@@ -118,6 +130,17 @@ export default function Step4How() {
                 <Text className="font-sans-body text-xs text-brown-mid dark:text-greige leading-snug">
                   {t(`onboarding.step4how.${step.descKey}`)}
                 </Text>
+                {step.taglineKey && (
+                  // Icon rendered inline INSIDE the Text component so the
+                  // tagline left-aligns with the description above (no
+                  // flex-row indent). Ionicons is a font icon, so when
+                  // nested in <Text> it renders as an inline glyph.
+                  <Text className="font-sans-bold text-xs text-brown-dark dark:text-tan leading-snug mt-2">
+                    <Ionicons name="sparkles" size={13} color="#705E46" />
+                    {"  "}
+                    {t(`onboarding.step4how.${step.taglineKey}`)}
+                  </Text>
+                )}
               </View>
             </View>
           ))}

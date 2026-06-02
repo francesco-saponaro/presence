@@ -63,13 +63,17 @@ Rules:
 - Always include the {name} placeholder (exact spelling, curly braces, lowercase) at least once per theme.
 - Vary the verbs: ask, tell, share (verbally), check in on, thank, congratulate, remind, etc. Do not start every theme the same way. Do NOT use "send" with media objects.
 
-KEYWORDS — these verify the user actually wrote about the theme, so they MUST reflect how real people text in everyday life:
-- Provide 15 to 20 keywords per theme — broad coverage matters because we use them to detect that the user touched on this topic, and casual texts can use very different vocabulary from one writer to another.
+KEYWORDS — these are how we detect which prompt the user actually touched on. The user can see the prompts in the app and pick what to write about, so we want keywords that are TIGHTLY relevant to each specific prompt — not a kitchen-sink of every word that could possibly appear in any message. A small set of high-signal keywords means when one matches, we're confident it's the right prompt:
+- Provide 5 to 8 keywords per theme — focused and specific to THIS prompt's topic. Quality over quantity. If a word could plausibly appear in many different prompts (e.g. "happy", "good", "hope"), it does not belong as a keyword.
 - Use CASUAL, COLLOQUIAL words a friend would actually type. NOT formal vocabulary.
 - Include common abbreviations and informal variants where they exist.
   Theme: "congratulate {name} on the new promotion"
-   GOOD keywords: ["congrats", "promotion", "promoted", "raise", "job", "boss", "amazing", "stoked", "happy", "proud"]
-   BAD keywords: ["congratulate", "achievement", "endeavor", "professional", "success"]
+   GOOD keywords: ["congrats", "promotion", "promoted", "raise", "job"]
+     (every word is tightly tied to "promotion" specifically — none of these would fit a different prompt)
+   BAD keywords: ["happy", "good", "hope", "amazing", "proud"]
+     (too generic — would also match many unrelated prompts and credit the wrong theme)
+   ALSO BAD: ["congratulate", "achievement", "endeavor", "professional"]
+     (too formal — real texts say "congrats", not "congratulate")
 - Each keyword must be ONE WORD (no spaces).
 - Keywords must be content words (topics, names of things, verbs, adjectives), NOT greetings or fillers like "how", "are", "you", "the", "hi", "hey", "good", "well".
 - Keywords must NOT include the person's name and must NOT include the literal "{name}" placeholder.
@@ -129,7 +133,7 @@ function sanitizeThemes(raw: unknown): Theme[] {
       .filter((k): k is string => typeof k === "string")
       .map((k) => k.trim().toLowerCase())
       .filter((k) => k.length > 1 && k.length < 32 && !BANNED.has(k))
-      .slice(0, 20);
+      .slice(0, 8);
 
     if (keywords.length < 2) continue;
 
