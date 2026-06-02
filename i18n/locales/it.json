@@ -336,6 +336,8 @@
     "failure": "Non siamo riusciti a verificare questa connessione. Prova con uno screenshot più chiaro.",
     "failureNoContactTitle": "Non abbiamo trovato un contatto fidato.",
     "failureNoContactBody": "Assicurati che il suo nome appaia nella conversazione — scritto esattamente come l'hai salvato nella tua app di messaggistica.",
+    "failureTooOldTitle": "Serve uno screenshot più recente.",
+    "failureTooOldBody": "Questo è stato fatto un po' di tempo fa. Fai un nuovo screenshot della tua conversazione e riprova.",
     "failureNoThemeTitle": "Non l'abbiamo verificata del tutto.",
     "failureNoThemeBody": "Prova a menzionare qualcosa di specifico su {{name}} — il suo lavoro, la sua famiglia, o cosa ha in mente.",
     "bypass": "Salta verifica",

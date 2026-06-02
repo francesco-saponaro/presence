@@ -336,6 +336,8 @@
     "failure": "Nous n'avons pas pu vérifier cette connexion. Essayez une capture plus claire.",
     "failureNoContactTitle": "Nous n'avons pas trouvé un contact de confiance.",
     "failureNoContactBody": "Assurez-vous que son nom apparaît dans la conversation — orthographié exactement comme vous l'avez enregistré dans votre app de messagerie.",
+    "failureTooOldTitle": "Il nous faut une capture plus récente.",
+    "failureTooOldBody": "Celle-ci a été prise il y a un moment. Prenez une nouvelle capture de votre conversation et réessayez.",
     "failureNoThemeTitle": "Pas tout à fait vérifié.",
     "failureNoThemeBody": "Essayez de mentionner quelque chose de spécifique à {{name}} — son travail, sa famille, ou ce qui l'occupe.",
     "bypass": "Ignorer la vérification",

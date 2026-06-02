@@ -336,6 +336,8 @@
     "failure": "No pudimos verificar esta conexión. Intenta con una captura más clara.",
     "failureNoContactTitle": "No pudimos leer el nombre de un contacto de confianza.",
     "failureNoContactBody": "Asegúrate de que su nombre aparezca en la conversación — escrito exactamente como lo guardaste en tu app de mensajería.",
+    "failureTooOldTitle": "Necesitamos una captura más reciente.",
+    "failureTooOldBody": "Esta se tomó hace un rato. Toma una nueva captura de tu conversación e inténtalo de nuevo.",
     "failureNoThemeTitle": "No pudimos verificarla del todo.",
     "failureNoThemeBody": "Intenta mencionar algo específico de {{name}} — su trabajo, su familia o lo que tiene en mente.",
     "bypass": "Omitir verificación",

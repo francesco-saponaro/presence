@@ -15,6 +15,7 @@ import { useUserStore } from "@/store/userStore";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
+import * as MediaLibrary from "expo-media-library";
 import * as StoreReview from "expo-store-review";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -32,6 +33,13 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import Toast from "react-native-toast-message";
+
+/** Max age of a screenshot accepted as proof, in hours. Read from the iOS
+ *  Photos library's PHAsset.creationDate, so a fresh screenshot of an old
+ *  conversation taken today still passes (intentional — the user did just
+ *  take it). The strict name-match gate is the actual anti-cheat layer; this
+ *  bounds how stale the visual evidence is. */
+const MAX_SCREENSHOT_AGE_HOURS = 6;
 
 export default function HomeScreen() {
   const { t } = useTranslation();
@@ -113,7 +121,41 @@ export default function HomeScreen() {
 
     if (result.canceled) return;
 
-    const uri = result.assets[0].uri;
+    const asset = result.assets[0];
+    const uri = asset.uri;
+
+    // Strict recency gate: read the screenshot's creation time from the iOS
+    // Photos library (PHAsset.creationDate). Rejects screenshots older than
+    // MAX_SCREENSHOT_AGE_HOURS without running OCR. Works only on iOS where
+    // assetId is populated; Android skips the check gracefully (different
+    // photo library API; we can revisit if Android testing surfaces the need).
+    // Falls open on any error so we don't block a legitimate upload because
+    // of a metadata API hiccup.
+    if (asset.assetId) {
+      try {
+        const info = await MediaLibrary.getAssetInfoAsync(asset.assetId);
+        const creationMs = info?.creationTime;
+        if (typeof creationMs === "number" && creationMs > 0) {
+          const ageHours = (Date.now() - creationMs) / (1000 * 60 * 60);
+          if (__DEV__) console.log("[OCR] screenshot age (hours):", ageHours.toFixed(2));
+          if (ageHours > MAX_SCREENSHOT_AGE_HOURS) {
+            incrementOcrFail();
+            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            Toast.show({
+              type: "error",
+              text1: t("shield.failureTooOldTitle"),
+              text2: t("shield.failureTooOldBody"),
+              visibilityTime: 5000,
+            });
+            return;
+          }
+        }
+      } catch (err) {
+        if (__DEV__) console.warn("[OCR] getAssetInfoAsync failed:", err);
+        // Fall open — OCR pipeline still runs.
+      }
+    }
+
     setIsVerifying(true);
 
     const validation = await runOCRValidation(uri, contacts);

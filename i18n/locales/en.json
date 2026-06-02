@@ -336,6 +336,8 @@
     "failure": "We couldn't verify this connection. Try a clearer screenshot.",
     "failureNoContactTitle": "We couldn't read a trusted contact's name.",
     "failureNoContactBody": "Make sure their name appears in the conversation — spelled exactly as you saved it in your messaging app.",
+    "failureTooOldTitle": "We need a fresher screenshot.",
+    "failureTooOldBody": "This one was taken a while ago. Take a new screenshot of your conversation and try again.",
     "failureNoThemeTitle": "Couldn't quite read this one.",
     "failureNoThemeBody": "Try mentioning something specific to {{name}} — their work, family, or what's on their mind.",
     "bypass": "Skip verification",
