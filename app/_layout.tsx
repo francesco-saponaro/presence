@@ -206,7 +206,10 @@ export default function RootLayout() {
         //     phone) — pulls existing contacts from Supabase.
         // Fire-and-forget so routing isn't blocked. Local store is preserved
         // if the call fails (offline / network error).
-        pullContactsFromSupabase().catch(() => {});
+        console.log("[_layout] auth event:", event, "→ triggering pullContactsFromSupabase");
+        pullContactsFromSupabase().catch((err) => {
+          console.warn("[_layout] pullContactsFromSupabase rejected:", err);
+        });
       }
 
       // SIGNED_IN covers email, Apple, and Google auth — route to the

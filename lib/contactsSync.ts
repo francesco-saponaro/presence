@@ -193,11 +193,41 @@ interface ThemeRowFull {
  *
  * No-op when there's no session or when the network call fails — the local
  * Zustand store is preserved in that case so users keep working offline.
+ *
+ * **Awaits contacts-store hydration first (CRITICAL).** Zustand's `persist`
+ * middleware does an async AsyncStorage read on store creation. When it
+ * completes, it runs `set(merged, true)` (the `true` is the replace flag)
+ * which REPLACES the in-memory state with the merge of in-memory and disk.
+ * If we call `setContacts([pulled])` before hydration finishes, the persisted
+ * snapshot (possibly empty after a prior cross-account `clearAll`) overwrites
+ * the freshly-pulled rows ~10–100ms later. Symptom: contacts exist in
+ * Supabase but the local store stays empty after reinstall / app update.
+ * Same pattern as `shieldEngine.ts:384`.
  */
 export async function pullContactsFromSupabase(): Promise<void> {
+  console.log("[contactsSync] pull called. hasHydrated:", useContactsStore.persist.hasHydrated());
+
+  if (!useContactsStore.persist.hasHydrated()) {
+    await new Promise<void>((resolve) => {
+      const unsub = useContactsStore.persist.onFinishHydration(() => {
+        unsub();
+        resolve();
+      });
+    });
+    console.log("[contactsSync] hydration finished, proceeding with pull");
+  }
+
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    const { data: { user }, error: getUserErr } = await supabase.auth.getUser();
+    if (getUserErr) {
+      console.warn("[contactsSync] getUser failed:", getUserErr.message);
+      return;
+    }
+    if (!user) {
+      console.warn("[contactsSync] getUser returned null user — skipping pull");
+      return;
+    }
+    console.log("[contactsSync] pulling contacts for user:", user.id);
 
     const { data: contactRows, error: contactsErr } = await supabase
       .from("contacts")
@@ -210,6 +240,7 @@ export async function pullContactsFromSupabase(): Promise<void> {
     }
 
     const rows = (contactRows ?? []) as ContactRow[];
+    console.log("[contactsSync] fetched", rows.length, "contact rows");
 
     // Single batch query for all themes belonging to those contacts.
     let themesByContact: Record<string, ThemeRowFull[]> = {};
@@ -248,6 +279,7 @@ export async function pullContactsFromSupabase(): Promise<void> {
     }));
 
     useContactsStore.getState().setContacts(contacts);
+    console.log("[contactsSync] setContacts called with", contacts.length, "contacts");
   } catch (err) {
     console.warn("[contactsSync] pull contacts threw:", err);
   }

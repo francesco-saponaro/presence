@@ -12,10 +12,12 @@ import { useContactsStore } from "@/store/contacts";
 import { useRoutineStore } from "@/store/routine";
 import { useShieldStore } from "@/store/shield";
 import { useUserStore } from "@/store/userStore";
+import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import * as MediaLibrary from "expo-media-library";
+import { router } from "expo-router";
 import * as StoreReview from "expo-store-review";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -302,6 +304,41 @@ export default function HomeScreen() {
               </View>
             )}
           </View>
+
+          {/* ── No-contacts setup card ── */}
+          {contacts.length === 0 && (
+            <View
+              className="bg-tan/30 dark:bg-brown-mid/30 rounded-3xl p-6 mb-8 border border-tan dark:border-brown-mid"
+              style={{
+                shadowColor: "#422701",
+                shadowOffset: { width: 0, height: 6 },
+                shadowOpacity: 0.1,
+                shadowRadius: 16,
+                elevation: 3,
+              }}
+            >
+              <View className="flex-row items-center mb-4">
+                <View className="w-12 h-12 rounded-full bg-brown-dark dark:bg-tan items-center justify-center mr-4">
+                  <Ionicons
+                    name="person-add"
+                    size={22}
+                    color="#FDFBF7"
+                  />
+                </View>
+                <Text className="font-serif-display text-2xl text-text-dark dark:text-text-light flex-1 leading-tight">
+                  {t("home.noContactsTitle")}
+                </Text>
+              </View>
+              <Text className="font-sans-body text-sm text-brown-mid dark:text-greige leading-relaxed mb-5">
+                {t("home.noContactsBody")}
+              </Text>
+              <PillButton
+                label={t("home.noContactsCta")}
+                variant="primary"
+                onPress={() => router.push("/contacts" as any)}
+              />
+            </View>
+          )}
 
           {/* ── CTA area (only when blocked) ── */}
           {isBlocked && (
