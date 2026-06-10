@@ -42,9 +42,9 @@ export default function Step7Paywall() {
   const setSubscribed = useUserStore((s) => s.setSubscribed);
 
   function handleBack() {
-    setCurrentStep(8);
+    setCurrentStep(7);
     if (router.canGoBack()) router.back();
-    else router.replace("/(onboarding)/step-6-permissions");
+    else router.replace("/(onboarding)/step-5-apps");
   }
 
   const [pkg, setPkg] = useState<PurchasesPackage | null>(null);
@@ -149,7 +149,7 @@ export default function Step7Paywall() {
           <Ionicons name="chevron-back" size={22} color="#705E46" />
         </TouchableOpacity>
         <View className="flex-1">
-          <OnboardingProgress current={9} total={9} />
+          <OnboardingProgress current={8} total={8} />
         </View>
       </View>
 

@@ -2,9 +2,11 @@ import { router } from "expo-router";
 import { useOnboardingStore } from "@/store/onboardingStore";
 import { useUserStore } from "@/store/userStore";
 
-// Maps step numbers 1–9 to their onboarding routes.
+// Maps step numbers 1–8 to their onboarding routes.
 // Note: file names reflect original step order; logical step numbers
-// have shifted due to two new steps (step-4-how and step-6-contacts).
+// have shifted due to inserted/removed steps. Permissions are now asked
+// contextually (Screen Time at block-time save, notifications after the
+// first contact is added) so there's no dedicated permissions screen.
 const STEP_ROUTES: Record<number, string> = {
   1: "/(onboarding)/step-1-hook",
   2: "/(onboarding)/step-2-reality",
@@ -13,8 +15,7 @@ const STEP_ROUTES: Record<number, string> = {
   5: "/(onboarding)/step-4-goal",
   6: "/(onboarding)/step-6-contacts",
   7: "/(onboarding)/step-5-apps",
-  8: "/(onboarding)/step-6-permissions",
-  9: "/(onboarding)/step-7-paywall",
+  8: "/(onboarding)/step-7-paywall",
 };
 
 /**

@@ -17,8 +17,8 @@ import {
   BottomSheetBackdrop,
   type BottomSheetBackdropProps,
   BottomSheetModal,
+  BottomSheetScrollView,
   BottomSheetTextInput,
-  BottomSheetView,
 } from "@gorhom/bottom-sheet";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -288,8 +288,12 @@ export const ContactQuestionsSheet = forwardRef<ContactQuestionsSheetRef, Props>
         qKey === "q2" ? state.q2 :
         qKey === "q3" ? state.q3 : state.q4;
 
+      // No flex: 1 anywhere — the sheet is now a BottomSheetScrollView, so a
+      // fixed-height input avoids the sheet stretching to accommodate the
+      // keyboard. iOS auto-scrolls the focused input above the keyboard
+      // natively (per gotcha #21).
       return (
-        <View className="flex-1">
+        <View>
           <View className="flex-row items-start mb-3 gap-3">
             <Text className="font-serif-display text-2xl text-text-dark flex-1 leading-snug">
               {label}
@@ -327,7 +331,6 @@ export const ContactQuestionsSheet = forwardRef<ContactQuestionsSheetRef, Props>
             multiline
             textAlignVertical="top"
             style={{
-              flex: 1,
               backgroundColor: "#FAF7F2",
               borderRadius: 16,
               borderWidth: 1,
@@ -338,8 +341,8 @@ export const ContactQuestionsSheet = forwardRef<ContactQuestionsSheetRef, Props>
               fontSize: 15,
               lineHeight: 22,
               color: "#2A1800",
+              minHeight: 120,
               maxHeight: 180,
-              minHeight: 80,
             }}
           />
         </View>
@@ -560,18 +563,26 @@ export const ContactQuestionsSheet = forwardRef<ContactQuestionsSheetRef, Props>
         backgroundStyle={{ backgroundColor: "#EBE6DF" }}
         handleIndicatorStyle={{ backgroundColor: "#C6C0B9" }}
       >
-        <BottomSheetView
-          style={{
-            flex: 1,
+        {/* BottomSheetScrollView per gotcha #21: lets iOS native ScrollView
+            auto-scroll the focused input above the keyboard, so the sheet
+            itself stays anchored at its 100% snap point (with topInset
+            ceiling). Without this, gorhom's default keyboard behavior pushes
+            the entire sheet up and leaves dead space below the content. */}
+        <BottomSheetScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{
+            flexGrow: 1,
             paddingHorizontal: 24,
             paddingTop: 4,
             paddingBottom: Math.max(insets.bottom, 16) + 8,
           }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
           {renderHeader()}
           <View style={{ flex: 1 }}>{renderBody()}</View>
           {renderFooter() && <View className="mt-4">{renderFooter()}</View>}
-        </BottomSheetView>
+        </BottomSheetScrollView>
       </BottomSheetModal>
     );
   },

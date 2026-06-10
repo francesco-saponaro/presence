@@ -13,7 +13,6 @@ export default function OnboardingLayout() {
       <Stack.Screen name="step-4-goal" options={{ gestureEnabled: true }} />
       <Stack.Screen name="step-6-contacts" options={{ gestureEnabled: true }} />
       <Stack.Screen name="step-5-apps" options={{ gestureEnabled: true }} />
-      <Stack.Screen name="step-6-permissions" options={{ gestureEnabled: true }} />
       <Stack.Screen name="step-7-paywall" />
     </Stack>
   );

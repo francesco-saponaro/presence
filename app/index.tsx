@@ -22,14 +22,17 @@ export default function Index() {
   const currentStep = useOnboardingStore((s) => s.currentStep);
   const isSubscribed = useUserStore((s) => s.isSubscribed);
 
+  // Logical step → route. File names reflect original step order; logical
+  // step numbers have shifted with inserted/removed steps (see lib/authRouting.ts).
   const STEP_ROUTES: Record<number, string> = {
     1: "/(onboarding)/step-1-hook",
     2: "/(onboarding)/step-2-reality",
     3: "/(onboarding)/step-3-shift",
-    4: "/(onboarding)/step-4-goal",
-    5: "/(onboarding)/step-5-apps",
-    6: "/(onboarding)/step-6-permissions",
-    7: "/(onboarding)/step-7-paywall",
+    4: "/(onboarding)/step-4-how",
+    5: "/(onboarding)/step-4-goal",
+    6: "/(onboarding)/step-6-contacts",
+    7: "/(onboarding)/step-5-apps",
+    8: "/(onboarding)/step-7-paywall",
   };
 
   useEffect(() => {

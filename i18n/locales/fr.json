@@ -52,36 +52,30 @@
   },
   "onboarding": {
     "step1": {
-      "label": "Étape 1 sur 9",
-      "question": "Comment vous sentez-vous en envoyant des mèmes ?",
-      "opt1": "Déconnecté",
-      "opt2": "Coupable",
-      "opt3": "Insensible",
-      "opt4": "Rien, honnêtement",
-      "opt5": "Épuisé",
-      "opt6": "Vide"
+      "label": "Étape 1 sur 8",
+      "question": "À qui aimeriez-vous parler davantage ?",
+      "opt1": "Ma famille",
+      "opt2": "Un ami proche",
+      "opt3": "Mon ou ma partenaire",
+      "opt4": "Quelqu'un dont je me suis éloigné"
     },
     "step2": {
-      "label": "Étape 2 sur 9",
+      "label": "Étape 2 sur 8",
       "headline": "Vous n'êtes pas seul.",
-      "subhead": "La personne moyenne envoie 47 messages inutiles par semaine.",
-      "body": "Chaque réaction envoyée est une minute non consacrée à quelque chose de réel.",
-      "stat1": "47",
-      "stat1Label": "messages inutiles\npar semaine",
-      "stat2": "82",
-      "stat2Label": "jours par an\ndevant un écran",
-      "stat3": "9",
-      "stat3Label": "ans de votre vie\nvolés par le feed"
+      "subhead": "La plupart d'entre nous passent environ 2½ heures par jour dans le fil.",
+      "body": "Presence vous aide à rendre quelques-unes de ces minutes à quelqu'un de réel.",
+      "stat": "2½",
+      "statLabel": "heures par jour\ndans le fil"
     },
     "step3": {
-      "label": "Étape 3 sur 9",
-      "headline": "Arrêtez de remplacer les vraies conversations par des mèmes.",
-      "subhead": "Les personnes qui vous entourent méritent mieux qu'un mème transféré.",
-      "body": "Presence donne à votre téléphone une conscience — qui ne vous laisse pas vous cacher derrière le fil d'actualité."
+      "label": "Étape 3 sur 8",
+      "headline": "Votre téléphone peut vous ramener vers ceux qui comptent.",
+      "subhead": "Un allié dans votre poche, pas un gardien.",
+      "body": "Quand vient le moment de souffler, Presence vous oriente vers quelqu'un que vous aimez — pas juste vers le fil."
     },
     "step4how": {
-      "label": "Étape 4 sur 9",
-      "title": "Voici comment ça marche.",
+      "label": "Étape 4 sur 8",
+      "title": "Voici comment fonctionne Presence.",
       "subtitle": "Quatre étapes. Vraie connexion. Chaque jour.",
       "step1Title": "Bloquer",
       "step1Desc": "Vos apps choisies se bloquent automatiquement à l'heure définie.",
@@ -95,7 +89,7 @@
       "hint": "Conseil : assurez-vous que la capture est bien éclairée et facile à lire."
     },
     "step4": {
-      "label": "Étape 5 sur 9",
+      "label": "Étape 5 sur 8",
       "title": "Quand avez-vous le plus besoin de protection ?",
       "subtitle": "Vos apps se bloquent à cette heure chaque jour. Vous les débloquez en contactant quelqu'un de réel.",
       "frequencyLabel": "À quelle fréquence ?",
@@ -106,9 +100,9 @@
       "sheetConfirm": "Confirmer"
     },
     "step6contacts": {
-      "label": "Étape 6 sur 9",
+      "label": "Étape 6 sur 8",
       "title": "Qui vous garde ancré dans le réel ?",
-      "subtitle": "Ajoutez les personnes à qui vous vous engagez à écrire. Ce sont vos issues de secours.",
+      "subtitle": "Ajoutez les personnes à qui vous vous engagez à écrire. Il suffit d'en contacter une.",
       "placeholder": "Tapez un nom...",
       "add": "Ajouter",
       "hint": "À chaque fois que vos apps sont bloquées, vous devrez envoyer un message à l'une de ces personnes pour les débloquer.",
@@ -147,10 +141,14 @@
       "themesReady": "{{count}} idées prêtes",
       "themesMissing": "Ajoutez des détails pour obtenir des idées",
       "contactAdded": "{{name}} ajouté.",
-      "duplicateName": "{{name}} est déjà dans votre liste."
+      "duplicateName": "{{name}} est déjà dans votre liste.",
+      "notifPromptTitle": "Vous voulez un rappel doux ?",
+      "notifPromptBody": "On vous préviendra 15 minutes avant le blocage pour que vous puissiez écrire à {{name}}. Vous pouvez le changer dans Réglages.",
+      "notifPromptEnable": "Activer les rappels",
+      "notifPromptSkip": "Pas maintenant"
     },
     "step5": {
-      "label": "Étape 7 sur 9",
+      "label": "Étape 7 sur 8",
       "title": "Quelles apps vous distraient le plus ?",
       "subtitle": "Sélectionnez celles que Presence bloquera.",
       "selectHint": "Sélectionnez au moins une pour continuer.",
@@ -158,40 +156,14 @@
       "changeApps": "Modifier les apps sélectionnées",
       "selectedApps": "Apps sélectionnées"
     },
-    "step6": {
-      "label": "Étape 8 sur 9",
-      "title": "Quelques autorisations nécessaires.",
-      "subtitle": "Presence les utilise uniquement pour activer le bouclier.",
-      "screenTime": "Temps d'écran",
-      "screenTimeDesc": "Permet à Presence de savoir quand vous ouvrez une app bloquée — sans cela, le bouclier ne peut pas fonctionner.",
-      "notifications": "Notifications",
-      "notificationsDesc": "Recevez des rappels doux avant le début de votre blocage.",
-      "activityTracking": "Suivi d'activité",
-      "activityTrackingDesc": "Aide Presence à rester actif en arrière-plan sur Android.",
-      "photoLibrary": "Photothèque",
-      "photoLibraryDesc": "Nécessaire pour envoyer votre preuve de connexion authentique.",
-      "required": "Obligatoire",
-      "recommended": "Recommandé",
-      "requiredErrorTitle": "Deux autorisations requises.",
-      "requiredErrorBody": "Le Temps d'écran et la Photothèque sont essentiels au fonctionnement de Presence. Veuillez activer les deux pour continuer.",
-      "notificationsWarningTitle": "Une précision.",
-      "notificationsWarningBody": "Sans les notifications, nous ne pouvons pas vous rappeler l'approche de votre heure de blocage. Vous pouvez l'activer plus tard dans Réglages.",
-      "androidUsageTitle": "Accès à l'utilisation",
-      "androidUsageBody": "Sur l'écran suivant, trouvez 'Presence' dans la liste et activez-le.",
-      "androidBatteryTitle": "Optimisation de la batterie",
-      "androidBatteryBody": "Sur l'écran suivant, appuyez sur 'Ne pas optimiser' pour que Presence puisse fonctionner en arrière-plan.",
-      "requiredLockTitle": "Cette autorisation est obligatoire.",
-      "requiredLockBody": "Pour la modifier, rendez-vous dans les Réglages de votre appareil. Presence ne peut pas fonctionner sans elle.",
-      "photoDeniedBody": "Presence a besoin d'accéder à vos photos pour vérifier vos captures. Activez-le dans Réglages."
-    },
     "step7": {
-      "label": "Étape 9 sur 9",
+      "label": "Étape 8 sur 8",
       "title": "Votre vraie vie vous attend.",
-      "social": "Le coût de rester bloqué est plus élevé que n'importe quel abonnement.",
+      "social": "Un an de vraie connexion, pour moins que quelques cafés.",
       "benefit1": "Vos apps se bloquent. Votre concentration revient.",
       "benefit2": "Connexions authentiques suivies et célébrées.",
-      "benefit3": "Séries et insights pour rester honnête.",
-      "benefit4": "La seule app qui exige une vraie connexion.",
+      "benefit3": "Séries et insights qui vous gardent en mouvement.",
+      "benefit4": "La seule app qui transforme le temps d'écran en vraie connexion.",
       "planLabel": "Accès complet. Un seul prix.",
       "price": "19,99 €",
       "period": "/ an",

@@ -52,36 +52,30 @@
   },
   "onboarding": {
     "step1": {
-      "label": "Step 1 of 9",
-      "question": "How does sending memes make you feel?",
-      "opt1": "Disconnected",
-      "opt2": "Guilty",
-      "opt3": "Numb",
-      "opt4": "Nothing, honestly",
-      "opt5": "Exhausted",
-      "opt6": "Empty"
+      "label": "Step 1 of 8",
+      "question": "Who do you wish you talked to more?",
+      "opt1": "Family",
+      "opt2": "A close friend",
+      "opt3": "My partner",
+      "opt4": "Someone I've drifted from"
     },
     "step2": {
-      "label": "Step 2 of 9",
+      "label": "Step 2 of 8",
       "headline": "You're not alone.",
-      "subhead": "The average person sends 47 meaningless messages a week.",
-      "body": "Every reaction you send is a minute you didn't spend on something real.",
-      "stat1": "47",
-      "stat1Label": "meaningless\nmessages a week",
-      "stat2": "82",
-      "stat2Label": "days a year\nstaring at a screen",
-      "stat3": "9",
-      "stat3Label": "years of your life\ngone to the feed"
+      "subhead": "Most of us spend around 2½ hours a day in the feed.",
+      "body": "Presence helps you turn a few of those minutes back toward someone real.",
+      "stat": "2½",
+      "statLabel": "hours a day\nin the feed"
     },
     "step3": {
-      "label": "Step 3 of 9",
-      "headline": "Stop substituting memes for real conversations.",
-      "subhead": "The people in your life deserve more than a forwarded meme.",
-      "body": "Presence gives your phone a conscience — one that won't let you hide behind the feed."
+      "label": "Step 3 of 8",
+      "headline": "Your phone can point you back to the people who matter.",
+      "subhead": "An ally in your pocket, not a warden.",
+      "body": "When it's time to unwind, Presence nudges you toward someone you love — not just the feed."
     },
     "step4how": {
-      "label": "Step 4 of 9",
-      "title": "Here's how it works.",
+      "label": "Step 4 of 8",
+      "title": "Here's how Presence works.",
       "subtitle": "Four steps. Real connection. Every day.",
       "step1Title": "Lock",
       "step1Desc": "Your chosen apps lock automatically at your set time.",
@@ -95,7 +89,7 @@
       "hint": "Tip: make sure the screenshot is well-lit and easy to read."
     },
     "step4": {
-      "label": "Step 5 of 9",
+      "label": "Step 5 of 8",
       "title": "When should Presence protect you?",
       "subtitle": "Your apps lock at this time every day. You unlock them by reaching out to someone real.",
       "frequencyLabel": "How often?",
@@ -106,9 +100,9 @@
       "sheetConfirm": "Confirm"
     },
     "step6contacts": {
-      "label": "Step 6 of 9",
+      "label": "Step 6 of 8",
       "title": "Who keeps you grounded?",
-      "subtitle": "Add the people you commit to reaching out to. They are your way out.",
+      "subtitle": "Add the people you commit to reaching out to. Reaching one of them is all it takes.",
       "placeholder": "Type a name...",
       "add": "Add",
       "hint": "Each time your apps are blocked, you'll need to message one of these people to unlock them.",
@@ -147,10 +141,14 @@
       "themesReady": "{{count}} prompts ready",
       "themesMissing": "Add details to get prompts",
       "contactAdded": "{{name}} added.",
-      "duplicateName": "{{name}} is already in your list."
+      "duplicateName": "{{name}} is already in your list.",
+      "notifPromptTitle": "Want a gentle nudge?",
+      "notifPromptBody": "We'll remind you 15 minutes before your apps lock so you can reach out to {{name}}. You can change this later in Settings.",
+      "notifPromptEnable": "Enable reminders",
+      "notifPromptSkip": "Not now"
     },
     "step5": {
-      "label": "Step 7 of 9",
+      "label": "Step 7 of 8",
       "title": "Which apps distract you most?",
       "subtitle": "Select the ones Presence will shield.",
       "selectHint": "Select at least one to continue.",
@@ -158,40 +156,14 @@
       "changeApps": "Change Selected Apps",
       "selectedApps": "Selected Apps"
     },
-    "step6": {
-      "label": "Step 8 of 9",
-      "title": "A few permissions needed.",
-      "subtitle": "Presence only uses these to run the shield.",
-      "screenTime": "Screen Time",
-      "screenTimeDesc": "Lets Presence know when you open a blocked app — without this, the shield cannot work.",
-      "notifications": "Notifications",
-      "notificationsDesc": "Receive gentle nudges before your block time starts.",
-      "activityTracking": "Activity Tracking",
-      "activityTrackingDesc": "Helps Presence stay active in the background on Android.",
-      "photoLibrary": "Photo Library",
-      "photoLibraryDesc": "Required to upload your proof of genuine connection.",
-      "required": "Required",
-      "recommended": "Recommended",
-      "requiredErrorTitle": "Two permissions needed.",
-      "requiredErrorBody": "Screen Time and Photo Library are essential for Presence to work. Please enable both to continue.",
-      "notificationsWarningTitle": "Heads up.",
-      "notificationsWarningBody": "Without notifications, we can't remind you when your block time is near. You can enable this later in Settings.",
-      "androidUsageTitle": "Usage Access",
-      "androidUsageBody": "On the next screen, find 'Presence' in the list and enable it.",
-      "androidBatteryTitle": "Battery Optimization",
-      "androidBatteryBody": "On the next screen, tap 'Don't optimize' so Presence can run in the background.",
-      "requiredLockTitle": "This permission is required.",
-      "requiredLockBody": "To change it, go to your device Settings. Presence cannot work without it.",
-      "photoDeniedBody": "Presence needs photo access to verify your connection screenshots. Turn it on in Settings."
-    },
     "step7": {
-      "label": "Step 9 of 9",
+      "label": "Step 8 of 8",
       "title": "Your real life is waiting.",
-      "social": "The cost of staying stuck is higher than any subscription.",
+      "social": "A year of real connection, for less than a few coffees.",
       "benefit1": "Your apps lock. Your focus returns.",
       "benefit2": "Proven connections tracked and celebrated.",
-      "benefit3": "Streaks and insights that keep you honest.",
-      "benefit4": "The only app that demands real connection.",
+      "benefit3": "Streaks and insights that keep you going.",
+      "benefit4": "The only app that turns screen time into real connection.",
       "planLabel": "Full access. One price.",
       "price": "$19.99",
       "period": "/ year",

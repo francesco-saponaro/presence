@@ -87,7 +87,7 @@ export default function Step5Apps() {
       );
     }
     setCurrentStep(8);
-    router.push("/(onboarding)/step-6-permissions");
+    router.push("/(onboarding)/step-7-paywall");
   }
 
   const canContinue =
@@ -102,7 +102,7 @@ export default function Step5Apps() {
           <Ionicons name="chevron-back" size={22} color="#705E46" />
         </TouchableOpacity>
         <View className="flex-1">
-          <OnboardingProgress current={7} total={9} />
+          <OnboardingProgress current={7} total={8} />
         </View>
       </View>
 

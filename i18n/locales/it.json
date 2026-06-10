@@ -52,36 +52,30 @@
   },
   "onboarding": {
     "step1": {
-      "label": "Passo 1 di 9",
-      "question": "Come ti fa sentire mandare meme?",
-      "opt1": "Disconnesso",
-      "opt2": "In colpa",
-      "opt3": "Insensibile",
-      "opt4": "Niente, onestamente",
-      "opt5": "Esausto",
-      "opt6": "Vuoto"
+      "label": "Passo 1 di 8",
+      "question": "Con chi vorresti parlare di più?",
+      "opt1": "La mia famiglia",
+      "opt2": "Un amico stretto",
+      "opt3": "Il mio partner",
+      "opt4": "Qualcuno da cui mi sono allontanato"
     },
     "step2": {
-      "label": "Passo 2 di 9",
+      "label": "Passo 2 di 8",
       "headline": "Non sei solo.",
-      "subhead": "La persona media invia 47 messaggi inutili a settimana.",
-      "body": "Ogni reazione inviata è un minuto non speso su qualcosa di reale.",
-      "stat1": "47",
-      "stat1Label": "messaggi inutili\na settimana",
-      "stat2": "82",
-      "stat2Label": "giorni all'anno\ndavanti allo schermo",
-      "stat3": "9",
-      "stat3Label": "anni della tua vita\nperduti nel feed"
+      "subhead": "La maggior parte di noi passa circa 2½ ore al giorno nel feed.",
+      "body": "Presence ti aiuta a restituire qualche minuto a qualcuno di reale.",
+      "stat": "2½",
+      "statLabel": "ore al giorno\nnel feed"
     },
     "step3": {
-      "label": "Passo 3 di 9",
-      "headline": "Smetti di sostituire i meme con conversazioni vere.",
-      "subhead": "Le persone nella tua vita meritano più di un meme inoltrato.",
-      "body": "Presence dà al tuo telefono una coscienza — che non ti lascia nascondere dietro al feed."
+      "label": "Passo 3 di 8",
+      "headline": "Il tuo telefono può riportarti alle persone che contano.",
+      "subhead": "Un alleato in tasca, non un sorvegliante.",
+      "body": "Quando è il momento di staccare, Presence ti orienta verso qualcuno a cui tieni — non solo verso il feed."
     },
     "step4how": {
-      "label": "Passo 4 di 9",
-      "title": "Ecco come funziona.",
+      "label": "Passo 4 di 8",
+      "title": "Ecco come funziona Presence.",
       "subtitle": "Quattro passi. Connessione reale. Ogni giorno.",
       "step1Title": "Blocca",
       "step1Desc": "Le app scelte si bloccano automaticamente all'orario impostato.",
@@ -95,7 +89,7 @@
       "hint": "Consiglio: assicurati che lo screenshot sia ben illuminato e facile da leggere."
     },
     "step4": {
-      "label": "Passo 5 di 9",
+      "label": "Passo 5 di 8",
       "title": "Quando vuoi che Presence ti protegga?",
       "subtitle": "Le tue app si bloccano a quest'ora ogni giorno. Le sblocchi contattando qualcuno di reale.",
       "frequencyLabel": "Con quale frequenza?",
@@ -106,9 +100,9 @@
       "sheetConfirm": "Conferma"
     },
     "step6contacts": {
-      "label": "Passo 6 di 9",
+      "label": "Passo 6 di 8",
       "title": "Chi ti tiene ancorato alla realtà?",
-      "subtitle": "Aggiungi le persone con cui ti impegni a comunicare. Sono la tua via d'uscita.",
+      "subtitle": "Aggiungi le persone con cui ti impegni a comunicare. Basta contattarne una.",
       "placeholder": "Scrivi un nome...",
       "add": "Aggiungi",
       "hint": "Ogni volta che le tue app sono bloccate, dovrai inviare un messaggio a una di queste persone per sbloccarle.",
@@ -147,10 +141,14 @@
       "themesReady": "{{count}} idee pronte",
       "themesMissing": "Aggiungi dettagli per ricevere idee",
       "contactAdded": "{{name}} aggiunto.",
-      "duplicateName": "{{name}} è già nella tua lista."
+      "duplicateName": "{{name}} è già nella tua lista.",
+      "notifPromptTitle": "Vuoi un promemoria gentile?",
+      "notifPromptBody": "Ti avviseremo 15 minuti prima del blocco così puoi scrivere a {{name}}. Puoi cambiarlo nelle Impostazioni.",
+      "notifPromptEnable": "Attiva promemoria",
+      "notifPromptSkip": "Non ora"
     },
     "step5": {
-      "label": "Passo 7 di 9",
+      "label": "Passo 7 di 8",
       "title": "Quali app ti distraggono di più?",
       "subtitle": "Seleziona quelle che Presence bloccherà.",
       "selectHint": "Seleziona almeno una per continuare.",
@@ -158,40 +156,14 @@
       "changeApps": "Cambia le app selezionate",
       "selectedApps": "App selezionate"
     },
-    "step6": {
-      "label": "Passo 8 di 9",
-      "title": "Alcuni permessi necessari.",
-      "subtitle": "Presence li usa solo per attivare lo scudo.",
-      "screenTime": "Tempo di utilizzo",
-      "screenTimeDesc": "Consente a Presence di sapere quando apri un'app bloccata — senza questo, lo scudo non può funzionare.",
-      "notifications": "Notifiche",
-      "notificationsDesc": "Ricevi promemoria gentili prima dell'inizio del blocco.",
-      "activityTracking": "Monitoraggio attività",
-      "activityTrackingDesc": "Aiuta Presence a rimanere attivo in background su Android.",
-      "photoLibrary": "Libreria foto",
-      "photoLibraryDesc": "Necessario per caricare la prova della tua connessione genuina.",
-      "required": "Obbligatorio",
-      "recommended": "Consigliato",
-      "requiredErrorTitle": "Due permessi necessari.",
-      "requiredErrorBody": "Tempo di utilizzo e Libreria foto sono indispensabili per il funzionamento di Presence. Abilitali entrambi per continuare.",
-      "notificationsWarningTitle": "Una precisazione.",
-      "notificationsWarningBody": "Senza le notifiche non possiamo ricordarti quando si avvicina la tua ora di blocco. Puoi abilitarle in seguito nelle Impostazioni.",
-      "androidUsageTitle": "Accesso all'utilizzo",
-      "androidUsageBody": "Nella schermata successiva, trova 'Presence' nell'elenco e abilitalo.",
-      "androidBatteryTitle": "Ottimizzazione batteria",
-      "androidBatteryBody": "Nella schermata successiva, tocca 'Non ottimizzare' affinché Presence possa funzionare in background.",
-      "requiredLockTitle": "Questo permesso è obbligatorio.",
-      "requiredLockBody": "Per modificarlo, vai nelle Impostazioni del dispositivo. Presence non può funzionare senza di esso.",
-      "photoDeniedBody": "Presence ha bisogno dell'accesso alle foto per verificare i tuoi screenshot. Attivalo nelle Impostazioni."
-    },
     "step7": {
-      "label": "Passo 9 di 9",
+      "label": "Passo 8 di 8",
       "title": "La tua vita reale ti sta aspettando.",
-      "social": "Il costo di restare bloccato è più alto di qualsiasi abbonamento.",
+      "social": "Un anno di connessione vera, per meno di qualche caffè.",
       "benefit1": "Le tue app si bloccano. La tua concentrazione torna.",
       "benefit2": "Connessioni genuine tracciate e celebrate.",
-      "benefit3": "Serie e statistiche che ti tengono onesto.",
-      "benefit4": "L'unica app che richiede una vera connessione.",
+      "benefit3": "Serie e statistiche che ti tengono in cammino.",
+      "benefit4": "L'unica app che trasforma il tempo di schermo in connessione vera.",
       "planLabel": "Accesso completo. Un unico prezzo.",
       "price": "€19,99",
       "period": "/ anno",

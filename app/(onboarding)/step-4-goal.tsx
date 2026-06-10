@@ -105,8 +105,11 @@ export default function Step4Goal() {
     scheduleStartToast(selectedTime);
     setCurrentStep(6);
     router.push("/(onboarding)/step-6-contacts");
-    // Fire-and-forget: permissions step (step-6-permissions) handles the main
-    // Screen Time prompt, but re-prompt here if somehow already denied/revoked.
+    // Permissions are now asked contextually — Screen Time at block-time save
+    // (here), notifications after the first contact is added, and Photo Library
+    // at the first upload. Fire-and-forget so navigation doesn't wait on the
+    // native modal; the home tab's checkAndUpdateShield re-prompts if still not
+    // approved when the schedule is about to trigger.
     ensureScreenTimeAuth().catch(console.warn);
   }
 
@@ -117,7 +120,7 @@ export default function Step4Goal() {
           <Ionicons name="chevron-back" size={22} color="#705E46" />
         </TouchableOpacity>
         <View className="flex-1">
-          <OnboardingProgress current={5} total={9} />
+          <OnboardingProgress current={5} total={8} />
         </View>
       </View>
 

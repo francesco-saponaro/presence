@@ -30,7 +30,7 @@ export default function Step3Shift() {
           <Ionicons name="chevron-back" size={22} color="#705E46" />
         </TouchableOpacity>
         <View className="flex-1">
-          <OnboardingProgress current={3} total={9} />
+          <OnboardingProgress current={3} total={8} />
         </View>
       </View>
 
@@ -40,7 +40,7 @@ export default function Step3Shift() {
       >
         <View className="w-full items-center mt-6 mb-8">
           <Image
-            source={require("@/assets/images/onboarding-3.png")}
+            source={require("@/assets/images/onboarding-1.png")}
             style={{ width: "100%", height: 240 }}
             contentFit="contain"
           />

@@ -73,7 +73,7 @@ export default function Step4How() {
           <Ionicons name="chevron-back" size={22} color="#705E46" />
         </TouchableOpacity>
         <View className="flex-1">
-          <OnboardingProgress current={4} total={9} />
+          <OnboardingProgress current={4} total={8} />
         </View>
       </View>
 

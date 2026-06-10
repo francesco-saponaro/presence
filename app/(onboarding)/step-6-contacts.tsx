@@ -1,13 +1,15 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  Alert,
   View,
   Text,
   TextInput,
   ScrollView,
   TouchableOpacity,
-  KeyboardAvoidingView,
   Keyboard,
   Platform,
+  useWindowDimensions,
+  type LayoutChangeEvent,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -17,21 +19,90 @@ import Toast from "react-native-toast-message";
 import { useOnboardingStore } from "@/store/onboardingStore";
 import { useContactsStore } from "@/store/contacts";
 import { deleteContact } from "@/lib/contactsSync";
+import {
+  requestNotificationPermission,
+  scheduleWarmupNotification,
+} from "@/lib/notifications";
+import { useRoutineStore } from "@/store/routine";
 import { OnboardingProgress } from "@/components/ui/OnboardingProgress";
 import { PillButton } from "@/components/ui/PillButton";
 import {
   ContactQuestionsSheet,
   type ContactQuestionsSheetRef,
 } from "@/components/ui/ContactQuestionsSheet";
+import * as Notifications from "expo-notifications";
 
 export default function Step6Contacts() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const { height: screenHeight } = useWindowDimensions();
   const setCurrentStep = useOnboardingStore((s) => s.setCurrentStep);
   const contacts = useContactsStore((s) => s.contacts);
 
   const [inputValue, setInputValue] = useState("");
   const sheetRef = useRef<ContactQuestionsSheetRef>(null);
+
+  // Manual keyboard handling. KeyboardAvoidingView creates an ugly empty
+  // padding gap between the input and the keyboard (the padding *is* the
+  // shrunken area — there's no content to paint there). Instead we:
+  //   (1) track keyboard height via Keyboard events
+  //   (2) extend the ScrollView contentContainer paddingBottom by that height
+  //       so the ScrollView becomes scrollable past the natural content bottom
+  //   (3) scrollTo a position that lifts the focused input above the keyboard
+  //       with comfortable breathing room, while the contact list (below the
+  //       input in DOM order) remains naturally visible in the lifted view
+  // The Continue button is outside the ScrollView so it stays anchored and
+  // simply hides behind the keyboard during typing.
+  const scrollRef = useRef<ScrollView>(null);
+  const inputRowYRef = useRef(0);
+  const [kbHeight, setKbHeight] = useState(0);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      (e) => setKbHeight(e.endCoordinates.height),
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => setKbHeight(0),
+    );
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  function handleInputRowLayout(e: LayoutChangeEvent) {
+    inputRowYRef.current = e.nativeEvent.layout.y;
+  }
+
+  function handleInputFocus() {
+    // Defer a tick so the keyboard show event has fired (kbHeight populated)
+    // and the contentContainer's expanded paddingBottom is in effect —
+    // scrollTo gets clamped to the old content size otherwise.
+    setTimeout(() => {
+      // Target: input row sits ~MARGIN px above the keyboard top, not at the
+      // top of the screen. Math:
+      //   ScrollView starts at screen Y = insets.top + HEADER_HEIGHT
+      //   Keyboard top at screen Y = screenHeight - kbHeight
+      //   Visible scroll area above keyboard = keyboard_top - scrollview_top
+      //   To put the input row's BOTTOM at (keyboard_top - MARGIN), the
+      //   row's content offset must shift up by enough that:
+      //     input_top_viewport_Y = visible_area_height - INPUT_HEIGHT - MARGIN
+      //   i.e. scrollY = inputRowYRef.current - (visibleAreaHeight - INPUT_HEIGHT - MARGIN).
+      const HEADER_HEIGHT = 40;
+      const INPUT_HEIGHT = 50;
+      const MARGIN = 24;
+      const scrollViewTop = insets.top + HEADER_HEIGHT;
+      const keyboardTop = screenHeight - kbHeight;
+      const visibleAreaHeight = keyboardTop - scrollViewTop;
+      const targetY = Math.max(
+        0,
+        inputRowYRef.current - visibleAreaHeight + INPUT_HEIGHT + MARGIN,
+      );
+      scrollRef.current?.scrollTo({ y: targetY, animated: true });
+    }, 80);
+  }
 
   function handleAdd() {
     const name = inputValue.trim();
@@ -83,14 +154,49 @@ export default function Step6Contacts() {
     }
     // Avoid double-celebrating: if preview just showed, skip the toast.
     // For non-first contacts (no preview), show a small success toast.
-    const hadPreview = contacts.length <= 1; // contact was just added → length includes it
-    if (!hadPreview) {
+    const isFirstContact = contacts.length <= 1; // contact was just added → length includes it
+    if (!isFirstContact) {
       Toast.show({
         type: "success",
         text1: t("onboarding.step6contacts.contactAdded", { name }),
         visibilityTime: 2500,
       });
+      return;
     }
+    // First contact: this is the right moment to ask for notification permission —
+    // we have someone to nudge them about. Pre-prompt with context so iOS doesn't
+    // burn the one chance to show the system dialog on a cold "Allow notifications?"
+    maybeAskForNotifications(name);
+  }
+
+  async function maybeAskForNotifications(contactName: string) {
+    // Skip if already granted/denied at the OS level — iOS only shows the system
+    // dialog when status is 'undetermined', so don't pre-prompt in other cases.
+    const { status, canAskAgain } = await Notifications.getPermissionsAsync();
+    if (status === "granted") return;
+    if (!canAskAgain) return;
+
+    Alert.alert(
+      t("onboarding.step6contacts.notifPromptTitle"),
+      t("onboarding.step6contacts.notifPromptBody", { name: contactName }),
+      [
+        { text: t("onboarding.step6contacts.notifPromptSkip"), style: "cancel" },
+        {
+          text: t("onboarding.step6contacts.notifPromptEnable"),
+          onPress: async () => {
+            const granted = await requestNotificationPermission();
+            if (!granted) return;
+            // If a routine is already set (user came back to add a contact, or
+            // re-ordered the flow), re-schedule the warm-up so the body bakes
+            // in the just-added contact via the rotation library.
+            const { blockTimeUtc, frequency } = useRoutineStore.getState();
+            if (blockTimeUtc && frequency) {
+              scheduleWarmupNotification(blockTimeUtc, frequency).catch(() => {});
+            }
+          },
+        },
+      ],
+    );
   }
 
   return (
@@ -100,18 +206,23 @@ export default function Step6Contacts() {
           <Ionicons name="chevron-back" size={22} color="#705E46" />
         </TouchableOpacity>
         <View className="flex-1">
-          <OnboardingProgress current={6} total={9} />
+          <OnboardingProgress current={6} total={8} />
         </View>
       </View>
 
-      <KeyboardAvoidingView
-        className="flex-1"
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-      >
+      {/* See the keyboard-handling block at the top of the component for the
+          rationale. The ScrollView gets an extra `kbHeight` of paddingBottom
+          while the keyboard is open so it can scroll past its natural content
+          end, and handleInputFocus does the manual scrollTo that lifts the
+          input above the keyboard. */}
+      <View className="flex-1">
         <ScrollView
-          contentContainerStyle={{ flexGrow: 1, paddingBottom: 24 }}
+          ref={scrollRef}
+          contentContainerStyle={{ flexGrow: 1, paddingBottom: 24 + kbHeight }}
+          scrollIndicatorInsets={{ bottom: kbHeight }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
         >
           {/* Header */}
           <View className="px-6 pt-6 pb-4">
@@ -164,8 +275,13 @@ export default function Step6Contacts() {
             {t("onboarding.step6contacts.hint")}
           </Text>
 
-          {/* Input row */}
-          <View className="px-6 flex-row gap-3 mb-5">
+          {/* Input row — onLayout captures its Y position in the ScrollView
+              content so handleInputFocus can scrollTo a target that places
+              the input ~80px below the visible top when the keyboard opens. */}
+          <View
+            className="px-6 flex-row gap-3 mb-5"
+            onLayout={handleInputRowLayout}
+          >
             <TextInput
               value={inputValue}
               onChangeText={setInputValue}
@@ -173,6 +289,7 @@ export default function Step6Contacts() {
               placeholderTextColor="#C6C0B9"
               returnKeyType="done"
               onSubmitEditing={handleAdd}
+              onFocus={handleInputFocus}
               className="flex-1 bg-surface-light dark:bg-surface-dark font-sans-body text-sm text-text-dark dark:text-text-light rounded-2xl px-4 py-3 border border-greige dark:border-brown-mid"
             />
             <TouchableOpacity
@@ -240,25 +357,27 @@ export default function Step6Contacts() {
             })}
           </View>
         </ScrollView>
+      </View>
 
-        {/* CTA */}
-        <View
-          className="px-6 pt-4 border-t border-surface-light dark:border-surface-dark"
-          style={{ paddingBottom: Math.max(insets.bottom, 24) }}
-        >
-          {contacts.length === 0 && (
-            <Text className="font-sans-body text-xs text-greige text-center mb-3">
-              {t("onboarding.step6contacts.empty")}
-            </Text>
-          )}
-          <PillButton
-            label={t("common.continue")}
-            variant="primary"
-            disabled={contacts.length === 0}
-            onPress={handleNext}
-          />
-        </View>
-      </KeyboardAvoidingView>
+      {/* CTA — sibling of the ScrollView wrapper, so it stays anchored at the
+          bottom of the screen when the keyboard opens (hidden behind it
+          during typing, visible again on dismiss). */}
+      <View
+        className="px-6 pt-4 border-t border-surface-light dark:border-surface-dark"
+        style={{ paddingBottom: Math.max(insets.bottom, 24) }}
+      >
+        {contacts.length === 0 && (
+          <Text className="font-sans-body text-xs text-greige text-center mb-3">
+            {t("onboarding.step6contacts.empty")}
+          </Text>
+        )}
+        <PillButton
+          label={t("common.continue")}
+          variant="primary"
+          disabled={contacts.length === 0}
+          onPress={handleNext}
+        />
+      </View>
 
       <ContactQuestionsSheet ref={sheetRef} onAdded={handleContactAdded} />
     </SafeAreaView>
