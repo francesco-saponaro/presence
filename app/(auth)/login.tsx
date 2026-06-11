@@ -17,6 +17,7 @@ import {
   ScrollView,
   Text,
   TouchableOpacity,
+  useColorScheme,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -25,6 +26,8 @@ import Toast from "react-native-toast-message";
 export default function LoginScreen() {
   const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(false);
+  const isDark = useColorScheme() === "dark";
+  const socialIconColor = isDark ? "#FDFBF7" : "#2A1800";
   const {
     control,
     handleSubmit,
@@ -186,7 +189,7 @@ export default function LoginScreen() {
                   disabled={isLoading}
                   className="flex-row items-center justify-center gap-3 rounded-full border border-greige dark:border-brown-mid py-4 px-6"
                 >
-                  <Ionicons name="logo-apple" size={20} color="#2A1800" />
+                  <Ionicons name="logo-apple" size={20} color={socialIconColor} />
                   <Text className="font-sans-medium text-base text-text-dark dark:text-text-light">
                     {t("auth.apple")}
                   </Text>
@@ -199,7 +202,7 @@ export default function LoginScreen() {
                 disabled={isLoading}
                 className="flex-row items-center justify-center gap-3 rounded-full border border-greige dark:border-brown-mid py-4 px-6"
               >
-                <Ionicons name="logo-google" size={18} color="#2A1800" />
+                <Ionicons name="logo-google" size={18} color={socialIconColor} />
                 <Text className="font-sans-medium text-base text-text-dark dark:text-text-light">
                   {t("auth.google")}
                 </Text>

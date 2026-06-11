@@ -7,6 +7,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Linking,
+  useColorScheme,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -27,6 +28,8 @@ const PRIVACY_URL = "https://gist.github.com/francesco-saponaro/8fc0b7c3e435c488
 export default function SignupScreen() {
   const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(false);
+  const isDark = useColorScheme() === "dark";
+  const socialIconColor = isDark ? "#FDFBF7" : "#2A1800";
   const { control, handleSubmit, formState: { errors }, watch, setValue } =
     useForm<SignupForm>({
       resolver: zodResolver(signupSchema),
@@ -245,7 +248,7 @@ export default function SignupScreen() {
                   disabled={isLoading}
                   className="flex-row items-center justify-center gap-3 rounded-full border border-greige dark:border-brown-mid py-4 px-6"
                 >
-                  <Ionicons name="logo-apple" size={20} color="#2A1800" />
+                  <Ionicons name="logo-apple" size={20} color={socialIconColor} />
                   <Text className="font-sans-medium text-base text-text-dark dark:text-text-light">
                     {t("auth.apple")}
                   </Text>
@@ -258,7 +261,7 @@ export default function SignupScreen() {
                 disabled={isLoading}
                 className="flex-row items-center justify-center gap-3 rounded-full border border-greige dark:border-brown-mid py-4 px-6"
               >
-                <Ionicons name="logo-google" size={18} color="#2A1800" />
+                <Ionicons name="logo-google" size={18} color={socialIconColor} />
                 <Text className="font-sans-medium text-base text-text-dark dark:text-text-light">
                   {t("auth.google")}
                 </Text>
