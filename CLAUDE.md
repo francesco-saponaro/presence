@@ -473,6 +473,11 @@ These were discovered during development and must be respected:
    - **Save button placement:** put it at the bottom of the scrollable content (iOS-Settings-form pattern), not pinned absolutely. Always reachable by scrolling, never occluded by the keyboard.
    - **Direct child rule still applies (gotcha #13):** `BottomSheetScrollView` / `BottomSheetFlatList` must be the direct child of `BottomSheetModal` or gorhom can't measure height correctly. Don't wrap them in `BottomSheetView`.
 
+22. **Notification tap routing — never add `getLastNotificationResponseAsync()` for cold start (CRITICAL):**
+   - The notification tap handler in `_layout.tsx` is intentionally **listener-only**: `Notifications.addNotificationResponseReceivedListener` for background/foreground taps, gated by an `_hasHydrated` check that bails when stores aren't ready.
+   - **Do NOT add `Notifications.getLastNotificationResponseAsync()` to "fix" cold-start routing.** Cold start is already handled by `app/index.tsx`'s route effect: the OS launches the app on tap, stores hydrate, `index.tsx` reads state and replaces to `/(tabs)` (for fully-onboarded subscribed users). Adding the response check on top creates two routers racing — empirically the result is the splash screen sticking and an infinite `routeAfterAuth ↔ checkAndUpdateShield` log loop on iOS killed-state launches. We don't fully understand the mechanism (suspect: `router.replace` from the response handler before nav is ready re-mounts the root layout, which re-fires every `useEffect` including `startShieldEngine` AND the response check, which still resolves with the same cold-start tap, ad infinitum). Either way, the fix is not adding the cold-start path at all.
+   - The listener handler must use `routeAfterAuth()` (not `router.replace("/(tabs)")`) so that a user who isn't onboarded/subscribed isn't dumped onto the tabs and bounced back by `index.tsx` — that flash also looks like "the app didn't open."
+
 ## 11. Pre-Launch Checklist (Before App Store Submission)
 
 These items must be completed before submitting to App Store / Play Store:

@@ -134,10 +134,19 @@ export default function RootLayout() {
     initNotifications();
   }, []);
 
-  // Route to home when the user taps either notification.
+  // Route the user to the right screen when they tap a notification.
+  // Background / foreground only — for cold start (killed), the OS launches
+  // the app and index.tsx handles routing once stores hydrate, so we explicitly
+  // bail here if hydration isn't done to avoid racing it.
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener(() => {
-      router.replace("/(tabs)" as any);
+      if (
+        !useAuthStore.getState()._hasHydrated ||
+        !useOnboardingStore.getState()._hasHydrated
+      ) {
+        return;
+      }
+      routeAfterAuth();
     });
     return () => sub.remove();
   }, []);
