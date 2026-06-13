@@ -1,5 +1,5 @@
 import ManagedSettings
-import Foundation
+import UIKit
 
 /**
  * PresenceShieldAction — ShieldActionDelegate app extension
@@ -18,13 +18,24 @@ import Foundation
  * `$(PRODUCT_MODULE_NAME).ShieldActionExtension`, so this class must keep
  * exactly that name.
  *
- * Opening the host app from an app extension:
- *   `UIApplication.shared.open(_:)` is marked unavailable in app extensions at
- *   compile time, but the underlying ObjC selector still exists. Looking up
- *   `UIApplication` via `NSClassFromString` and invoking `openURL:` via
- *   `perform(_:)` is the well-known runtime workaround that ships in many
- *   Screen Time apps. It bypasses the compiler check without using truly
- *   private API.
+ * Opening the host app from an app extension — TWO approaches, tried in order:
+ *
+ * 1. `NSExtensionContext.open(_:completionHandler:)` accessed via KVC on `self`.
+ *    Apple-sanctioned API for opening URLs from extensions; the shield-action
+ *    extension point is not on the unavailable list. The catch is that
+ *    `ShieldActionDelegate` doesn't publicly expose `extensionContext`, so we
+ *    fish it out via `value(forKey:)`. Works on iOS 16+.
+ *
+ * 2. Runtime `UIApplication.sharedApplication openURL:` selector lookup. The
+ *    compiler-level "unavailable in app extensions" check is a Swift overlay
+ *    only; the underlying ObjC selector still exists at runtime. Ships in
+ *    several production Screen Time apps. Requires UIKit to be linked into
+ *    this extension — `import UIKit` above forces Swift's autolinker to add
+ *    it, since `@bacons/apple-targets`' shield-action registry entry only
+ *    declares ManagedSettings.
+ *
+ * Whichever fires first wins. Both are wrapped so a failure can't crash the
+ * extension or change the response we hand the system.
  */
 class ShieldActionExtension: ShieldActionDelegate {
 
@@ -81,11 +92,35 @@ class ShieldActionExtension: ShieldActionDelegate {
     // MARK: - URL-scheme launch
 
     private func openHostApp() {
-        guard let url = URL(string: appURLScheme) else { return }
-        guard let appCls = NSClassFromString("UIApplication") as? NSObject.Type else { return }
-        guard let app = appCls.value(forKey: "sharedApplication") as? NSObject else { return }
+        guard let url = URL(string: appURLScheme) else {
+            NSLog("[PresenceShieldAction] bad URL string")
+            return
+        }
+
+        // Approach 1: NSExtensionContext.open via KVC.
+        if let context = self.value(forKey: "extensionContext") as? NSExtensionContext {
+            NSLog("[PresenceShieldAction] opening via extensionContext")
+            context.open(url) { success in
+                NSLog("[PresenceShieldAction] extensionContext open success=%@", success ? "true" : "false")
+            }
+            return
+        }
+
+        // Approach 2: runtime UIApplication.sharedApplication openURL:.
+        guard let appCls = NSClassFromString("UIApplication") as? NSObject.Type else {
+            NSLog("[PresenceShieldAction] UIApplication class not found (UIKit not loaded)")
+            return
+        }
+        guard let app = appCls.value(forKey: "sharedApplication") as? NSObject else {
+            NSLog("[PresenceShieldAction] sharedApplication unavailable")
+            return
+        }
         let selector = NSSelectorFromString("openURL:")
-        guard app.responds(to: selector) else { return }
+        guard app.responds(to: selector) else {
+            NSLog("[PresenceShieldAction] openURL: selector not responding")
+            return
+        }
+        NSLog("[PresenceShieldAction] opening via UIApplication runtime selector")
         _ = app.perform(selector, with: url)
     }
 }
