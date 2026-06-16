@@ -85,7 +85,7 @@ export default function Step4How() {
         <View className="w-full items-center mt-6 mb-8 overflow-hidden">
           <Image
             source={require("@/assets/images/onboarding-5.png")}
-            style={{ width: "100%", height: 240, transform: [{ scale: 4 }] }}
+            style={{ width: "100%", height: 240 }}
             contentFit="contain"
           />
         </View>

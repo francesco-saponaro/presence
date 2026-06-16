@@ -1,12 +1,12 @@
-import { useState } from "react";
-import { View, Text, ScrollView } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Image } from "expo-image";
-import { router } from "expo-router";
-import { useTranslation } from "react-i18next";
-import { useOnboardingStore } from "@/store/onboardingStore";
 import { OnboardingProgress } from "@/components/ui/OnboardingProgress";
 import { PillButton } from "@/components/ui/PillButton";
+import { useOnboardingStore } from "@/store/onboardingStore";
+import { Image } from "expo-image";
+import { router } from "expo-router";
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { ScrollView, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 const OPTIONS_KEYS = ["opt1", "opt2", "opt3", "opt4"] as const;
 
@@ -26,8 +26,11 @@ export default function Step1Hook() {
   return (
     <SafeAreaView className="flex-1 bg-milk dark:bg-espresso">
       {/* Progress */}
-      <View className="px-6 pt-4">
-        <OnboardingProgress current={1} total={8} />
+      <View className="px-6 pt-4 flex-row items-center gap-3">
+        <View className="h-[22px]" />
+        <View className="flex-1">
+          <OnboardingProgress current={1} total={8} />
+        </View>
       </View>
 
       <ScrollView
