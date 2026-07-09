@@ -6,6 +6,7 @@ import {
   onConnectionVerified,
   syncPendingConnections,
 } from "@/lib/shieldEngine";
+import { assignChallengeIfNeeded } from "@/lib/blockChallenge";
 import { supabase } from "@/lib/supabase";
 import { formatBlockTime, formatCountdown } from "@/lib/timezone";
 import { useContactsStore } from "@/store/contacts";
@@ -50,6 +51,7 @@ export default function HomeScreen() {
   const isBlocked = useShieldStore((s) => s.isBlocked);
   const ocrFailCount = useShieldStore((s) => s.ocrFailCount);
   const incrementOcrFail = useShieldStore((s) => s.incrementOcrFail);
+  const activeChallenge = useShieldStore((s) => s.activeChallenge);
 
   const blockTimeUtc = useRoutineStore((s) => s.blockTimeUtc);
   const frequency = useRoutineStore((s) => s.frequency);
@@ -57,6 +59,9 @@ export default function HomeScreen() {
 
   const connections = useUserStore((s) => s.lifetimeSuccessfulConnections);
   const streak = useUserStore((s) => s.currentStreak);
+  const achievementsEarned = useUserStore((s) => s.achievementsEarned);
+  const lastAckAchievement = useUserStore((s) => s.lastAckAchievement);
+  const acknowledgeAchievement = useUserStore((s) => s.acknowledgeAchievement);
 
   const setStats = useUserStore((s) => s.setStats);
 
@@ -105,6 +110,18 @@ export default function HomeScreen() {
     const id = setInterval(tick, 30_000);
     return () => clearInterval(id);
   }, [blockTimeUtc, isBlocked]);
+
+  // On-demand challenge assignment: if the user enters blocked state and no
+  // challenge is set (edge case — extension didn't get a chance to run, or a
+  // legacy block from before this feature landed), assign one now. This is a
+  // safety net; the warm-up notification bake time is the primary trigger.
+  useEffect(() => {
+    if (!isBlocked || activeChallenge) return;
+    if (contacts.length === 0) return;
+    assignChallengeIfNeeded().catch((e) =>
+      __DEV__ && console.warn("[home] assignChallengeIfNeeded:", e),
+    );
+  }, [isBlocked, activeChallenge, contacts.length]);
 
   // ── OCR flow ───────────────────────────────────────────────────────────────
 
@@ -160,13 +177,14 @@ export default function HomeScreen() {
 
     setIsVerifying(true);
 
-    const validation = await runOCRValidation(uri, contacts);
+    const validation = await runOCRValidation(uri, contacts, activeChallenge);
     setIsVerifying(false);
 
     if (validation.valid) {
       await onConnectionVerified(false, {
         contactId: validation.matchedContactId ?? null,
         themeId: validation.matchedThemeId ?? null,
+        challengeWord: validation.matchedChallengeWord ?? null,
       });
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Toast.show({ type: "success", text1: t("shield.success") });
@@ -181,18 +199,29 @@ export default function HomeScreen() {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       // Tailored copy per failure reason — generic "couldn't verify" is too
       // opaque when the user could fix it with a more specific tip.
-      const isNoContact = validation.reason === "no_contact_name";
+      let title = t("shield.failure");
+      let body: string | undefined = __DEV__
+        ? `reason=${validation.reason ?? "unknown"}`
+        : undefined;
+      let visibility = __DEV__ ? 6000 : 3000;
+
+      if (validation.reason === "no_contact_name") {
+        title = t("shield.failureNoContactTitle");
+        body = validation.requiredContactName
+          ? t("shield.failureNoContactNamedBody", { name: validation.requiredContactName })
+          : t("shield.failureNoContactBody");
+        visibility = 5500;
+      } else if (validation.reason === "no_challenge_word") {
+        title = t("shield.failureNoWordTitle");
+        body = t("shield.failureNoWordBody", { word: validation.requiredChallengeWord ?? "" });
+        visibility = 6000;
+      }
+
       Toast.show({
         type: "error",
-        text1: isNoContact
-          ? t("shield.failureNoContactTitle")
-          : t("shield.failure"),
-        text2: isNoContact
-          ? t("shield.failureNoContactBody")
-          : __DEV__
-            ? `reason=${validation.reason ?? "unknown"}${validation.matchedContactName ? ", matched=" + validation.matchedContactName : ""}`
-            : undefined,
-        visibilityTime: isNoContact ? 5000 : __DEV__ ? 6000 : 3000,
+        text1: title,
+        text2: body,
+        visibilityTime: visibility,
       });
     }
   }
@@ -216,6 +245,19 @@ export default function HomeScreen() {
   const hasRoutine = !!blockTimeUtc && !!frequency;
   const blockTimeLabel = blockTimeUtc ? formatBlockTime(blockTimeUtc) : null;
   const showBypass = isBlocked && ocrFailCount >= 2 && !isVerifying;
+
+  // The highest milestone the user has earned but not dismissed. When set, the
+  // Home achievement banner surfaces once (per new milestone) until dismissed.
+  const pendingAchievement = achievementsEarned.reduce<number>(
+    (top, m) => (m > lastAckAchievement && m > top ? m : top),
+    0,
+  );
+
+  // Prompt idea to show inside the challenge card. The theme text lives in
+  // placeholder form ("ask {name} about ...") — swap in the real name.
+  const challengePromptText = activeChallenge?.themeText
+    ? activeChallenge.themeText.replace(/\{name\}/gi, activeChallenge.contactName)
+    : null;
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -304,6 +346,114 @@ export default function HomeScreen() {
               </View>
             )}
           </View>
+
+          {/* ── Achievement banner (when a new milestone hasn't been dismissed) ── */}
+          {pendingAchievement > 0 && (
+            <View
+              className="bg-tan dark:bg-tan/90 rounded-3xl p-5 mb-6 border border-brown-dark/20"
+              style={{
+                shadowColor: "#422701",
+                shadowOffset: { width: 0, height: 6 },
+                shadowOpacity: 0.15,
+                shadowRadius: 16,
+                elevation: 4,
+              }}
+            >
+              <View className="flex-row items-center mb-2">
+                <Ionicons name="trophy" size={18} color="#422701" />
+                <Text className="font-sans-medium text-xs text-brown-dark uppercase tracking-wider ml-2">
+                  {t("home.achievementBannerLabel")}
+                </Text>
+              </View>
+              <Text className="font-serif-display text-2xl text-espresso leading-tight mb-1">
+                {t("home.achievementBannerTitle", { count: pendingAchievement })}
+              </Text>
+              <Text className="font-sans-body text-sm text-brown-dark leading-relaxed mb-4">
+                {t("home.achievementBannerBody")}
+              </Text>
+              <TouchableOpacity
+                onPress={() => acknowledgeAchievement(pendingAchievement)}
+                activeOpacity={0.7}
+                className="self-start bg-espresso rounded-full px-5 py-2"
+              >
+                <Text className="font-sans-medium text-sm text-milk">
+                  {t("home.achievementBannerCta")}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* ── Challenge card (blocked + active challenge) ── */}
+          {isBlocked && activeChallenge && (
+            <View
+              className="bg-surface-light dark:bg-surface-dark rounded-3xl p-6 mb-6 border border-tan dark:border-brown-mid"
+              style={{
+                shadowColor: "#422701",
+                shadowOffset: { width: 0, height: 6 },
+                shadowOpacity: 0.1,
+                shadowRadius: 16,
+                elevation: 3,
+              }}
+            >
+              <View className="flex-row items-center mb-3">
+                <Ionicons name="flame" size={16} color="#705E46" />
+                <Text className="font-sans-medium text-xs text-brown-mid dark:text-tan uppercase tracking-wider ml-2">
+                  {t("home.challengeTitle")}
+                </Text>
+              </View>
+
+              <Text className="font-sans-body text-sm text-brown-mid dark:text-greige leading-relaxed">
+                {t("home.challengeReachOut")}
+              </Text>
+              <Text className="font-serif-display text-3xl text-text-dark dark:text-text-light leading-tight mt-1 mb-4">
+                {activeChallenge.contactName}
+              </Text>
+
+              <Text className="font-sans-body text-sm text-brown-mid dark:text-greige leading-relaxed mb-2">
+                {t("home.challengeIncludeWord")}
+              </Text>
+              <View className="self-start bg-brown-dark dark:bg-tan rounded-2xl px-5 py-3 mb-3">
+                <Text className="font-serif-display text-2xl text-milk dark:text-espresso tracking-wide">
+                  {activeChallenge.word}
+                </Text>
+              </View>
+              <Text className="font-sans-body text-xs text-greige dark:text-brown-mid leading-relaxed mb-4">
+                {t("home.challengeCaptionExact")}
+              </Text>
+
+              {challengePromptText && (
+                <View className="border-t border-greige/40 dark:border-brown-mid/40 pt-4">
+                  <Text className="font-sans-medium text-xs text-brown-mid dark:text-tan uppercase tracking-wider mb-1">
+                    {t("home.challengePromptLabel")}
+                  </Text>
+                  <Text className="font-sans-body text-sm italic text-text-dark dark:text-text-light leading-relaxed">
+                    “{challengePromptText}”
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* ── Stale-prompts nudge (challenge fell back to a re-used word) ── */}
+          {isBlocked && activeChallenge?.themesStale && (
+            <View className="bg-milk dark:bg-espresso rounded-3xl p-5 mb-6 border border-tan dark:border-brown-mid">
+              <Text className="font-serif-display text-lg text-text-dark dark:text-text-light leading-tight mb-2">
+                {t("home.stalePromptsTitle")}
+              </Text>
+              <Text className="font-sans-body text-sm text-brown-mid dark:text-greige leading-relaxed mb-4">
+                {t("home.stalePromptsBody", { name: activeChallenge.contactName })}
+              </Text>
+              <TouchableOpacity
+                onPress={() => router.push("/contacts" as any)}
+                activeOpacity={0.7}
+                className="self-start bg-brown-dark dark:bg-tan rounded-full px-5 py-2"
+              >
+                <Text className="font-sans-medium text-sm text-milk dark:text-espresso">
+                  {t("home.stalePromptsEdit")}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* ── No-contacts setup card ── */}
           {contacts.length === 0 && (

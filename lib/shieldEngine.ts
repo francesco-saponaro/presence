@@ -26,6 +26,8 @@ import {
   scheduleWarmupNotification,
 } from "./notifications";
 import { markThemeUsedRemote } from "./contactsSync";
+import { newlyEarnedMilestones, resolveActiveChallenge } from "./blockChallenge";
+import { fireAchievementNotification } from "./notifications";
 
 // Throttle the "Screen Time revoked" alert to once per app session.
 let _screenTimeAlertShown = false;
@@ -270,10 +272,16 @@ export async function checkAndUpdateShield(): Promise<void> {
  * Phase 4: pass the matched contact/theme IDs from `runOCRValidation` so the
  * connection_proofs row records which person + which prompt was satisfied,
  * and so the theme's `used_at` advances (driving Phase 5 rotation).
+ *
+ * Phase 9: also resolves the active block_challenge row and captures the
+ * satisfied challenge word into the proof row (drives the analytics word-bank
+ * progress + rotation-avoidance logic). Achievement milestones are checked
+ * here — new ones fire a local notification and are persisted to the user
+ * store so they don't re-fire on relaunch.
  */
 export async function onConnectionVerified(
   wasManualBypass = false,
-  matched?: { contactId?: string | null; themeId?: string | null },
+  matched?: { contactId?: string | null; themeId?: string | null; challengeWord?: string | null },
 ): Promise<void> {
   const { setBlocked, addPendingConnection, resetOcrFail, setLastConnectionAt } =
     useShieldStore.getState();
@@ -281,19 +289,40 @@ export async function onConnectionVerified(
 
   const timestamp = new Date().toISOString();
 
+  // Resolve the currently-active challenge row (if any). The matched.* passed
+  // in should already reflect the challenge — this is the DB-side counterpart.
+  const resolved = resolveActiveChallenge();
+  const contactId = matched?.contactId ?? resolved.contactId;
+  const themeId = matched?.themeId ?? resolved.themeId;
+  const challengeWord = matched?.challengeWord ?? resolved.word;
+
   setBlocked(false);
   resetOcrFail();
   addPendingConnection(timestamp, {
-    contactId: matched?.contactId ?? null,
-    themeId: matched?.themeId ?? null,
+    contactId,
+    themeId,
+    challengeWord,
     wasBypass: wasManualBypass,
   });
   recordConnection();
 
   // Advance the matched theme's used_at so the rotation moves on. Skipped for
   // bypass (no theme was satisfied) and for the contact-without-themes path.
-  if (!wasManualBypass && matched?.themeId) {
-    markThemeUsedRemote(matched.themeId).catch(console.warn);
+  if (!wasManualBypass && themeId) {
+    markThemeUsedRemote(themeId).catch(console.warn);
+  }
+
+  // Achievement check — after recordConnection, so we see the new lifetime.
+  const {
+    lifetimeSuccessfulConnections,
+    achievementsEarned,
+    addAchievement,
+  } = useUserStore.getState();
+  const fresh = newlyEarnedMilestones(lifetimeSuccessfulConnections, achievementsEarned);
+  for (const milestone of fresh) {
+    addAchievement(milestone);
+    // Fire the local push, don't block the verify flow on notification errors.
+    fireAchievementNotification(milestone).catch(console.warn);
   }
 
   // Advance the block baseline so the current block is satisfied and won't
@@ -343,17 +372,20 @@ export async function syncPendingConnections(): Promise<void> {
       was_bypass: conn.wasBypass ?? false,
       contact_id: conn.contactId ?? null,
       theme_id: conn.themeId ?? null,
+      challenge_word: conn.challengeWord ?? null,
     });
     if (!error) markConnectionSynced(conn.timestamp);
   }
 
-  // Mirror lifetime count + streak into the profiles table
-  const { lifetimeSuccessfulConnections, currentStreak } = useUserStore.getState();
+  // Mirror lifetime count + streak + achievements into the profiles table
+  const { lifetimeSuccessfulConnections, currentStreak, achievementsEarned } =
+    useUserStore.getState();
   const { error: updateError } = await supabase
     .from("profiles")
     .update({
       lifetime_connections: lifetimeSuccessfulConnections,
       current_streak: currentStreak,
+      achievements_earned: achievementsEarned,
     })
     .eq("id", session.user.id);
   if (updateError) console.warn("[shieldEngine] profile update:", updateError);

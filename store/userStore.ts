@@ -10,6 +10,12 @@ interface UserState {
   lifetimeSuccessfulConnections: number;
   currentStreak: number;
   lastConnectionDate: string | null; // "YYYY-MM-DD" local date
+  /** Milestone thresholds already celebrated. Used so a fresh app open after
+   *  hitting e.g. connection 3 does not re-fire the "3 connections!" banner. */
+  achievementsEarned: number[];
+  /** Highest milestone whose in-app banner the user has explicitly dismissed.
+   *  When achievementsEarned contains a value > this, the Home banner shows. */
+  lastAckAchievement: number;
   language: string;         // persisted i18n locale code
   languageSetByUser: boolean; // true only after an explicit manual selection
   _hasHydrated: boolean;
@@ -25,6 +31,12 @@ interface UserState {
   recordConnection: () => void;
   /** @deprecated use recordConnection instead */
   incrementConnections: () => void;
+  /** Mark one milestone as earned (idempotent). */
+  addAchievement: (milestone: number) => void;
+  setAchievements: (earned: number[]) => void;
+  /** Dismiss the currently-shown achievement banner up to & including
+   *  `milestone`. Subsequent higher milestones will still surface a banner. */
+  acknowledgeAchievement: (milestone: number) => void;
   setLanguage: (lang: string) => void;
   setHasHydrated: (val: boolean) => void;
   clearUser: () => void;
@@ -50,6 +62,8 @@ export const useUserStore = create<UserState>()(
       lifetimeSuccessfulConnections: 0,
       currentStreak: 0,
       lastConnectionDate: null,
+      achievementsEarned: [],
+      lastAckAchievement: 0,
       language: "en",
       languageSetByUser: false,
       _hasHydrated: false,
@@ -91,6 +105,16 @@ export const useUserStore = create<UserState>()(
           lifetimeSuccessfulConnections: s.lifetimeSuccessfulConnections + 1,
         })),
 
+      addAchievement: (milestone) =>
+        set((s) => (s.achievementsEarned.includes(milestone)
+          ? {}
+          : { achievementsEarned: [...s.achievementsEarned, milestone].sort((a, b) => a - b) })),
+
+      setAchievements: (achievementsEarned) => set({ achievementsEarned }),
+
+      acknowledgeAchievement: (milestone) =>
+        set((s) => ({ lastAckAchievement: Math.max(s.lastAckAchievement, milestone) })),
+
       setLanguage: (language) => set({ language, languageSetByUser: true }),
       setHasHydrated: (val) => set({ _hasHydrated: val }),
 
@@ -101,6 +125,8 @@ export const useUserStore = create<UserState>()(
           lifetimeSuccessfulConnections: 0,
           currentStreak: 0,
           lastConnectionDate: null,
+          achievementsEarned: [],
+          lastAckAchievement: 0,
           // isSubscribed / subscriptionExpiresAt intentionally kept —
           // same-user sign-out/sign-in must not lose subscription state.
           // Explicitly reset by _layout.tsx only for new or different accounts.

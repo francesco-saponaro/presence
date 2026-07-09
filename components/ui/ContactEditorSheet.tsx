@@ -487,6 +487,19 @@ export const ContactEditorSheet = forwardRef<ContactEditorSheetRef, Props>(
 
               {liveContact && liveContact.themes.length > 0 && (
                 <>
+                  {liveContact.themes.some((th) => th.keywords.length === 0) && (
+                    <View
+                      className="rounded-xl px-3 py-3 mb-3 border border-tan"
+                      style={{ backgroundColor: "rgba(214,181,136,0.18)" }}
+                    >
+                      <Text className="font-serif-display text-sm text-brown-dark leading-tight mb-1">
+                        {t("profile.contactEditor.staleBannerTitle")}
+                      </Text>
+                      <Text className="font-sans-body text-xs text-brown-mid leading-relaxed">
+                        {t("profile.contactEditor.staleBannerBody")}
+                      </Text>
+                    </View>
+                  )}
                   <Text className="font-sans-body text-xs text-brown-mid leading-relaxed mb-3 px-1">
                     {t("profile.contactEditor.themesIntro")}
                   </Text>

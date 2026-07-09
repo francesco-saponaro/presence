@@ -100,6 +100,19 @@ export async function scheduleWarmupNotification(
   const warmupHour = Math.floor(warmupMinutes / 60);
   const warmupMinute = warmupMinutes % 60;
 
+  // Assign/refresh the block challenge so the notification body names the same
+  // (contact + word) the Home screen will show when the shield goes up. This
+  // is one of the five re-bake triggers (see CLAUDE.md §7 notifications).
+  // Lazy require to break the notifications → blockChallenge → contactsSync →
+  // notifications import cycle (contactsSync calls scheduleWarmup on regen).
+  try {
+    const { assignChallengeIfNeeded } = require("@/lib/blockChallenge") as
+      typeof import("@/lib/blockChallenge");
+    await assignChallengeIfNeeded({ force: true });
+  } catch {
+    // Best-effort. Fallback body branches handle no-challenge state.
+  }
+
   const content = {
     title: "Presence",
     body: buildWarmupBody(),
@@ -143,15 +156,25 @@ export async function scheduleWarmupNotification(
 /**
  * Compose the warm-up notification body using the current rotation state.
  * Fallback chain:
- *   1. Targeted: a contact + one of their generated themes → composed prompt.
- *   2. Name-only: a contact exists but has no themes yet → generic "reach out
- *      to {{name}}" nudge.
- *   3. Generic: no contacts configured → original copy.
+ *   1. Challenge-aware: an active challenge is set (assigned in the schedule
+ *      flow above) → "Tonight, text {name} something with the word *X*."
+ *   2. Targeted: no challenge but a contact + theme is available → composed
+ *      prompt line (legacy behaviour — kept for the "no keywords" fallback).
+ *   3. Name-only: a contact exists but has no themes yet → generic nudge.
+ *   4. Generic: no contacts configured → original copy.
  *
  * Baked in at schedule time (Expo's repeating triggers fire with static
  * bodies). Re-scheduling on connection-verify and theme-regen keeps it fresh.
  */
 function buildWarmupBody(): string {
+  const challenge = useShieldStore.getState().activeChallenge;
+  if (challenge) {
+    return i18n.t("notifications.warmupBodyChallenge", {
+      name: challenge.contactName,
+      word: challenge.word,
+    });
+  }
+
   const contacts = useContactsStore.getState().contacts;
   const pending = useShieldStore.getState().pendingConnections;
 
@@ -166,6 +189,33 @@ function buildWarmupBody(): string {
   }
 
   return i18n.t("notifications.warmupBodyNoTheme", { name: contact.name });
+}
+
+// ─── Achievement notification (fires when a milestone is crossed) ───────────
+
+/**
+ * Fires immediately as a one-off local push celebrating a milestone. Not
+ * scheduled — the caller (`onConnectionVerified` after `recordConnection`)
+ * triggers it in the same tick a milestone is crossed. Data payload includes
+ * the milestone so a tap handler can deep-link to the achievements strip.
+ */
+export async function fireAchievementNotification(milestone: number): Promise<void> {
+  const granted = await requestNotificationPermission();
+  if (!granted) return;
+
+  await ensureNotificationChannel();
+
+  await Notifications.scheduleNotificationAsync({
+    // No identifier — one-off, fire-and-forget. If several milestones cross in
+    // rapid succession they each get their own entry in the notification tray.
+    content: {
+      title: i18n.t("notifications.achievementTitle", { count: milestone }),
+      body: i18n.t("notifications.achievementBody", { count: milestone }),
+      sound: true,
+      data: { type: "achievement", milestone },
+    },
+    trigger: null,
+  }).catch(() => {});
 }
 
 // ─── Inactivity notification (48 h after last connection) ─────────────────────

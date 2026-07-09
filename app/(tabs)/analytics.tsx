@@ -8,6 +8,7 @@ import { useContactsStore } from "@/store/contacts";
 import { useShieldStore } from "@/store/shield";
 import { supabase } from "@/lib/supabase";
 import { syncPendingConnections } from "@/lib/shieldEngine";
+import { ACHIEVEMENT_MILESTONES } from "@/lib/blockChallenge";
 import {
   formatWarmupLine,
   lastConnectionForContact,
@@ -30,7 +31,6 @@ function formatTimeReclaimed(connections: number): string {
   return `${hours}h ${minutes}m`;
 }
 
-/** Days since the given ISO, or null if iso is null. */
 function daysSince(iso: string | null): number | null {
   if (!iso) return null;
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -93,6 +93,21 @@ function StatCard({ value, label, unit }: StatCardProps) {
   );
 }
 
+interface ProgressBarProps {
+  ratio: number; // 0..1
+}
+function ProgressBar({ ratio }: ProgressBarProps) {
+  const width = Math.max(0, Math.min(1, ratio)) * 100;
+  return (
+    <View className="h-2 rounded-full bg-greige/40 dark:bg-brown-mid/40 overflow-hidden">
+      <View
+        className="h-full bg-brown-dark dark:bg-tan"
+        style={{ width: `${width}%` }}
+      />
+    </View>
+  );
+}
+
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 export default function AnalyticsScreen() {
@@ -101,6 +116,7 @@ export default function AnalyticsScreen() {
 
   const connections = useUserStore((s) => s.lifetimeSuccessfulConnections);
   const streak = useUserStore((s) => s.currentStreak);
+  const achievementsEarned = useUserStore((s) => s.achievementsEarned);
   const setStats = useUserStore((s) => s.setStats);
   const timeLabel = formatTimeReclaimed(connections);
 
@@ -122,6 +138,71 @@ export default function AnalyticsScreen() {
     decorated.sort((a, b) => a.lastMs - b.lastMs);
     return decorated;
   }, [contacts, pendingConnections]);
+
+  // ── Gamified rollups ────────────────────────────────────────────────────
+  //
+  // Word bank: distinct keywords the user has matched (from
+  // pendingConnections.challengeWord) vs. the total distinct keyword pool
+  // across every theme they have configured. This is what the "words landed"
+  // progress bar counts.
+  //
+  // Prompts explored: themes with usedAt !== null vs. total themes.
+  //
+  // Per-contact roll-ups reuse the same shape scoped to that contact.
+
+  const {
+    totalWordPool,
+    matchedWords,
+    matchedWordsPerContact,
+    totalWordsPerContact,
+    totalThemes,
+    exploredThemes,
+  } = useMemo(() => {
+    const totalPool = new Set<string>();
+    const wordsPerContact: Record<string, Set<string>> = {};
+    let themeCount = 0;
+    let exploredCount = 0;
+
+    for (const c of contacts) {
+      const set = new Set<string>();
+      for (const th of c.themes) {
+        themeCount += 1;
+        if (th.usedAt !== null) exploredCount += 1;
+        for (const kw of th.keywords) {
+          if (!kw) continue;
+          const w = kw.toLowerCase();
+          totalPool.add(w);
+          set.add(w);
+        }
+      }
+      wordsPerContact[c.id] = set;
+    }
+
+    const matched = new Set<string>();
+    const matchedPerContact: Record<string, Set<string>> = {};
+    for (const conn of pendingConnections) {
+      const word = conn.challengeWord?.toLowerCase();
+      if (!word) continue;
+      matched.add(word);
+      if (conn.contactId) {
+        (matchedPerContact[conn.contactId] ??= new Set()).add(word);
+      }
+    }
+
+    return {
+      totalWordPool: totalPool.size,
+      matchedWords: matched.size,
+      matchedWordsPerContact: matchedPerContact,
+      totalWordsPerContact: wordsPerContact,
+      totalThemes: themeCount,
+      exploredThemes: exploredCount,
+    };
+  }, [contacts, pendingConnections]);
+
+  const wordRatio = totalWordPool === 0 ? 0 : matchedWords / totalWordPool;
+  const promptRatio = totalThemes === 0 ? 0 : exploredThemes / totalThemes;
+
+  const nextMilestone = ACHIEVEMENT_MILESTONES.find((m) => !achievementsEarned.includes(m));
 
   const isContactsEmpty = contacts.length === 0;
 
@@ -171,20 +252,131 @@ export default function AnalyticsScreen() {
 
           {/* ── Aggregate stats: connections | streak | time ── */}
           <View className="flex-row gap-2.5 mb-8">
-            <StatCard
-              value={connections}
-              label={t("analytics.connections")}
-            />
+            <StatCard value={connections} label={t("analytics.connections")} />
             <StatCard
               value={streak}
               unit={t("analytics.days")}
               label={t("analytics.streak")}
             />
-            <StatCard
-              value={timeLabel}
-              label={t("analytics.timeReclaimed")}
-            />
+            <StatCard value={timeLabel} label={t("analytics.timeReclaimed")} />
           </View>
+
+          {/* ── Achievements strip ── */}
+          <Text className="font-sans-medium text-xs text-brown-mid dark:text-greige uppercase tracking-widest mb-3">
+            {t("analytics.achievementsTitle")}
+          </Text>
+          <View
+            className="bg-surface-light dark:bg-surface-dark rounded-3xl p-5 mb-8 border border-greige dark:border-brown-mid"
+            style={{
+              shadowColor: "#422701",
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.06,
+              shadowRadius: 12,
+              elevation: 2,
+            }}
+          >
+            <View className="flex-row flex-wrap gap-2 mb-3">
+              {ACHIEVEMENT_MILESTONES.map((milestone) => {
+                const unlocked = achievementsEarned.includes(milestone);
+                const isNext = !unlocked && milestone === nextMilestone;
+                return (
+                  <View
+                    key={milestone}
+                    className={[
+                      "flex-row items-center rounded-full px-3 py-1.5 border",
+                      unlocked
+                        ? "bg-brown-dark dark:bg-tan border-brown-dark dark:border-tan"
+                        : isNext
+                          ? "bg-tan/30 dark:bg-brown-mid/40 border-tan dark:border-tan"
+                          : "bg-transparent border-greige/60 dark:border-brown-mid/60",
+                    ].join(" ")}
+                  >
+                    <Ionicons
+                      name={unlocked ? "trophy" : "trophy-outline"}
+                      size={12}
+                      color={
+                        unlocked
+                          ? "#FDFBF7"
+                          : isNext
+                            ? "#422701"
+                            : "#C6C0B9"
+                      }
+                    />
+                    <Text
+                      className={[
+                        "font-sans-medium text-xs ml-1.5",
+                        unlocked
+                          ? "text-milk dark:text-espresso"
+                          : isNext
+                            ? "text-brown-dark dark:text-tan"
+                            : "text-greige dark:text-brown-mid",
+                      ].join(" ")}
+                    >
+                      {milestone}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+            <Text className="font-sans-body text-xs text-brown-mid dark:text-greige leading-relaxed">
+              {nextMilestone
+                ? t("analytics.achievementNext", { count: nextMilestone })
+                : t("analytics.achievementAllDone")}
+            </Text>
+          </View>
+
+          {/* ── Word bank + Prompts explored ── */}
+          {!isContactsEmpty && (
+            <>
+              <View
+                className="bg-surface-light dark:bg-surface-dark rounded-3xl p-5 mb-4 border border-greige dark:border-brown-mid"
+                style={{
+                  shadowColor: "#422701",
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.06,
+                  shadowRadius: 12,
+                  elevation: 2,
+                }}
+              >
+                <View className="flex-row items-center mb-2">
+                  <Ionicons name="pricetags-outline" size={16} color="#705E46" />
+                  <Text className="font-sans-medium text-xs text-brown-mid dark:text-tan uppercase tracking-widest ml-2">
+                    {t("analytics.wordBankTitle")}
+                  </Text>
+                </View>
+                <Text className="font-serif-display text-lg text-text-dark dark:text-text-light mb-3">
+                  {totalWordPool > 0
+                    ? t("analytics.wordBankBody", { matched: matchedWords, total: totalWordPool })
+                    : t("analytics.wordBankEmpty")}
+                </Text>
+                {totalWordPool > 0 && <ProgressBar ratio={wordRatio} />}
+              </View>
+
+              <View
+                className="bg-surface-light dark:bg-surface-dark rounded-3xl p-5 mb-8 border border-greige dark:border-brown-mid"
+                style={{
+                  shadowColor: "#422701",
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.06,
+                  shadowRadius: 12,
+                  elevation: 2,
+                }}
+              >
+                <View className="flex-row items-center mb-2">
+                  <Ionicons name="sparkles-outline" size={16} color="#705E46" />
+                  <Text className="font-sans-medium text-xs text-brown-mid dark:text-tan uppercase tracking-widest ml-2">
+                    {t("analytics.promptsExploredTitle")}
+                  </Text>
+                </View>
+                <Text className="font-serif-display text-lg text-text-dark dark:text-text-light mb-3">
+                  {totalThemes > 0
+                    ? t("analytics.promptsExploredBody", { used: exploredThemes, total: totalThemes })
+                    : t("analytics.promptsExploredEmpty")}
+                </Text>
+                {totalThemes > 0 && <ProgressBar ratio={promptRatio} />}
+              </View>
+            </>
+          )}
 
           {/* ── Your circle section ── */}
           <Text className="font-sans-medium text-xs text-brown-mid dark:text-greige uppercase tracking-widest mb-3">
@@ -226,6 +418,11 @@ export default function AnalyticsScreen() {
                 const showSuggestion =
                   suggestion !== null && suggestion.usedAt === null;
 
+                const wordsTotal = totalWordsPerContact[contact.id]?.size ?? 0;
+                const wordsMatched = matchedWordsPerContact[contact.id]?.size ?? 0;
+                const promptRatioPerContact =
+                  themeCount === 0 ? 0 : touchedCount / themeCount;
+
                 return (
                   <View
                     key={contact.id}
@@ -264,16 +461,21 @@ export default function AnalyticsScreen() {
                       </View>
                     </View>
 
-                    {/* Themes progress */}
+                    {/* Prompts progress bar */}
                     {themeCount > 0 && (
-                      <View className="flex-row items-center mt-3 pt-3 border-t border-greige/30 dark:border-brown-mid/30">
-                        <Ionicons name="sparkles-outline" size={14} color="#705E46" />
-                        <Text className="font-sans-body text-xs text-brown-mid dark:text-greige ml-1.5">
-                          {t("analytics.themesProgress", {
-                            used: touchedCount,
-                            total: themeCount,
-                          })}
-                        </Text>
+                      <View className="mt-3 pt-3 border-t border-greige/30 dark:border-brown-mid/30">
+                        <View className="flex-row items-center justify-between mb-1.5">
+                          <View className="flex-row items-center">
+                            <Ionicons name="sparkles-outline" size={12} color="#705E46" />
+                            <Text className="font-sans-body text-xs text-brown-mid dark:text-greige ml-1.5">
+                              {t("analytics.themesProgress", {
+                                used: touchedCount,
+                                total: themeCount,
+                              })}
+                            </Text>
+                          </View>
+                        </View>
+                        <ProgressBar ratio={promptRatioPerContact} />
                       </View>
                     )}
                     {themeCount === 0 && (
@@ -285,7 +487,23 @@ export default function AnalyticsScreen() {
                       </View>
                     )}
 
-                    {/* Unexplored suggestion (only when a fresh unused theme exists) */}
+                    {/* Words landed per contact */}
+                    {wordsTotal > 0 && (
+                      <View className="mt-3">
+                        <View className="flex-row items-center mb-1.5">
+                          <Ionicons name="pricetags-outline" size={12} color="#705E46" />
+                          <Text className="font-sans-body text-xs text-brown-mid dark:text-greige ml-1.5">
+                            {t("analytics.perContactWords", {
+                              matched: wordsMatched,
+                              total: wordsTotal,
+                            })}
+                          </Text>
+                        </View>
+                        <ProgressBar ratio={wordsMatched / wordsTotal} />
+                      </View>
+                    )}
+
+                    {/* Suggestion (only when a fresh unused theme exists) */}
                     {showSuggestion && (
                       <View
                         className="mt-3 rounded-xl px-3 py-2.5"
