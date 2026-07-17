@@ -76,17 +76,17 @@
     "step4how": {
       "label": "Étape 4 sur 8",
       "title": "Voici comment fonctionne Presence.",
-      "subtitle": "Quatre étapes. Vraie connexion. Chaque jour.",
+      "subtitle": "Un petit défi à chaque fois. Une vraie connexion chaque jour.",
       "step1Title": "Bloquer",
       "step1Desc": "Vos apps choisies se bloquent automatiquement à l'heure définie.",
-      "step2Title": "Connecter",
-      "step2Desc": "Écrivez à un contact de confiance.",
-      "step2DescHighlight": "On écrit des idées personnalisées pour chaque personne. Vous savez toujours quoi dire.",
-      "step3Title": "Capture",
-      "step3Desc": "Capturez et téléchargez la conversation — le message et la date doivent être clairement visibles.",
-      "step4Title": "Déverrouiller",
-      "step4Desc": "Votre capture est vérifiée en quelques secondes. Vos apps reviennent et vous reprenez votre journée — plus léger.",
-      "hint": "Conseil : assurez-vous que la capture est bien éclairée et facile à lire."
+      "step2Title": "Recevez votre défi",
+      "step2Desc": "On choisit un contact de confiance et un mot précis — comme \"fier\" ou \"paris\" — que vous devez glisser dans un message pour lui.",
+      "step2DescHighlight": "On écrit aussi des idées personnalisées pour chaque personne, pour que vous sachiez toujours quoi dire.",
+      "step3Title": "Écrivez-lui",
+      "step3Desc": "Envoyez un message sincère contenant le mot du défi, puis capturez la conversation — le message et la date doivent être visibles.",
+      "step4Title": "Déverrouillez et progressez",
+      "step4Desc": "Vérifié en quelques secondes. Vos apps reviennent, vos séries grandissent, et toutes les quelques connexions vous débloquez un nouveau palier.",
+      "hint": "Chaque cycle de blocage tire un nouveau mot — plus moyen de recycler la même capture."
     },
     "step4": {
       "label": "Étape 5 sur 8",
@@ -266,6 +266,8 @@
     "contactsPageTitle": "Contacts de confiance",
     "contactsPageIntro": "Ce sont les personnes à qui vous écrivez quand vos apps se verrouillent. Touchez l'une d'elles pour ajouter des détails.",
     "contactsPageEmpty": "Aucun contact pour l'instant. Ajoutez quelqu'un qui vous garde ancré dans le réel.",
+    "contactCardThemesSummary": "{{done}} sur {{total}} idées couvertes",
+    "contactCardStaleChip": "Épuisée — actualise",
     "contactEditor": {
       "title": "Modifier les détails",
       "subtitle": "Modifier une réponse rafraîchit les idées de messages.",
@@ -310,7 +312,7 @@
   "blockTime": {
     "startsToday": "Le bouclier démarre aujourd'hui à {{time}}.",
     "startsTomorrow": "Le bouclier démarre demain à {{time}}.",
-    "startsTomorrowSoon": "Attention — moins de 20 minutes. Votre bouclier démarrera demain à {{time}}.",
+    "startsTomorrowSoon": "Attention — moins de 2 minutes. Votre bouclier démarrera demain à {{time}}.",
     "screenTimeOffTitle": "Temps d'écran désactivé",
     "screenTimeOffBody": "Appuyez ici pour le réactiver dans Réglages afin que Presence puisse bloquer vos apps.",
     "screenTimeNearTitle": "Temps d'écran doit être activé",

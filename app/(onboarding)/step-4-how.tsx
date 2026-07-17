@@ -34,19 +34,19 @@ const HOW_STEPS: HowStep[] = [
     titleKey: "step2Title",
     descKey: "step2Desc",
     taglineKey: "step2DescHighlight",
-    icon: "chatbubble-ellipses-outline",
+    icon: "flame-outline",
   },
   {
     number: "3",
     titleKey: "step3Title",
     descKey: "step3Desc",
-    icon: "camera-outline",
+    icon: "chatbubble-ellipses-outline",
   },
   {
     number: "4",
     titleKey: "step4Title",
     descKey: "step4Desc",
-    icon: "lock-open-outline",
+    icon: "trophy-outline",
   },
 ];
 

@@ -23,6 +23,7 @@ import {
   ContactEditorSheet,
   type ContactEditorSheetRef,
 } from "@/components/ui/ContactEditorSheet";
+import { formatWarmupLine } from "@/lib/contactRotation";
 
 export default function ContactsScreen() {
   const { t } = useTranslation();
@@ -141,12 +142,13 @@ export default function ContactsScreen() {
             {contacts.map((contact) => {
               const themeCount = contact.themes.length;
               const themesReady = themeCount > 0;
+              const doneCount = contact.themes.filter((th) => th.usedAt !== null).length;
               return (
                 <TouchableOpacity
                   key={contact.id}
                   onPress={() => handleEdit(contact)}
                   activeOpacity={0.7}
-                  className="flex-row items-center bg-surface-light dark:bg-surface-dark rounded-2xl px-4 py-3 border border-greige/60 dark:border-brown-mid/60"
+                  className="bg-surface-light dark:bg-surface-dark rounded-2xl px-4 py-4 border border-greige/60 dark:border-brown-mid/60"
                   style={{
                     shadowColor: "#422701",
                     shadowOffset: { width: 0, height: 2 },
@@ -155,34 +157,85 @@ export default function ContactsScreen() {
                     elevation: 2,
                   }}
                 >
-                  <View
-                    className="w-10 h-10 rounded-full items-center justify-center mr-3"
-                    style={{ backgroundColor: "rgba(214,181,136,0.25)" }}
-                  >
-                    <Text className="font-sans-bold text-base text-brown-dark dark:text-tan">
-                      {contact.name[0]?.toUpperCase()}
-                    </Text>
-                  </View>
-                  <View className="flex-1">
-                    <Text className="font-sans-medium text-base text-text-dark dark:text-text-light">
-                      {contact.name}
-                    </Text>
-                    <View className="flex-row items-center mt-0.5">
-                      <Ionicons
-                        name={themesReady ? "sparkles" : "alert-circle-outline"}
-                        size={12}
-                        color={themesReady ? "#705E46" : "#C6C0B9"}
-                      />
-                      <Text
-                        className={`font-sans-body text-xs ml-1 ${themesReady ? "text-brown-mid dark:text-greige" : "text-greige"}`}
-                      >
-                        {themesReady
-                          ? t("onboarding.step6contacts.themesReady", { count: themeCount })
-                          : t("onboarding.step6contacts.themesMissing")}
+                  {/* Header row: avatar + name + summary + chevron */}
+                  <View className="flex-row items-center">
+                    <View
+                      className="w-10 h-10 rounded-full items-center justify-center mr-3"
+                      style={{ backgroundColor: "rgba(214,181,136,0.25)" }}
+                    >
+                      <Text className="font-sans-bold text-base text-brown-dark dark:text-tan">
+                        {contact.name[0]?.toUpperCase()}
                       </Text>
                     </View>
+                    <View className="flex-1">
+                      <Text className="font-sans-medium text-base text-text-dark dark:text-text-light">
+                        {contact.name}
+                      </Text>
+                      <View className="flex-row items-center mt-0.5">
+                        <Ionicons
+                          name={themesReady ? "sparkles" : "alert-circle-outline"}
+                          size={12}
+                          color={themesReady ? "#705E46" : "#C6C0B9"}
+                        />
+                        <Text
+                          className={`font-sans-body text-xs ml-1 ${themesReady ? "text-brown-mid dark:text-greige" : "text-greige"}`}
+                        >
+                          {themesReady
+                            ? t("profile.contactCardThemesSummary", {
+                                done: doneCount,
+                                total: themeCount,
+                              })
+                            : t("onboarding.step6contacts.themesMissing")}
+                        </Text>
+                      </View>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color="#C6C0B9" />
                   </View>
-                  <Ionicons name="chevron-forward" size={20} color="#C6C0B9" />
+
+                  {/* Prompt list — visible inline, no need to open the editor.
+                      Each row shows the composed prompt with a check for used,
+                      sparkle for still-available, and a subtle "stale" chip if
+                      the theme's keyword pool is empty. */}
+                  {themesReady && (
+                    <View className="mt-3 pt-3 border-t border-greige/30 dark:border-brown-mid/30 gap-2">
+                      {contact.themes.map((theme) => {
+                        const used = theme.usedAt !== null;
+                        const stale = theme.keywords.length === 0;
+                        const line = formatWarmupLine(contact, theme);
+                        return (
+                          <View
+                            key={theme.id}
+                            className="rounded-xl px-3 py-2 flex-row items-start"
+                            style={{
+                              backgroundColor: used
+                                ? "rgba(198,192,185,0.18)"
+                                : "rgba(214,181,136,0.15)",
+                              opacity: used ? 0.65 : 1,
+                            }}
+                          >
+                            <Ionicons
+                              name={used ? "checkmark-circle" : "sparkles-outline"}
+                              size={14}
+                              color={used ? "#705E46" : "#422701"}
+                              style={{ marginTop: 2 }}
+                            />
+                            <View className="flex-1 ml-2">
+                              <Text
+                                className={`font-serif-display text-sm leading-snug ${used ? "text-brown-mid" : "text-brown-dark dark:text-tan"}`}
+                              >
+                                {`“${line}”`}
+                              </Text>
+                              {stale && (
+                                <Text className="font-sans-medium text-[10px] text-tan uppercase tracking-widest mt-1">
+                                  {t("profile.contactCardStaleChip")}
+                                </Text>
+                              )}
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  )}
                 </TouchableOpacity>
               );
             })}

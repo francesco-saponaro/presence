@@ -107,12 +107,12 @@ export default function BlockTimeScreen() {
     const timeStr = formatTime(time);
 
     // Three cases:
-    //   1. Today's instance is still in the future and ≥20 min away → fires today.
-    //   2. Today's instance is in the future but <20 min away → DeviceActivity
-    //      needs lead time, so it slips to tomorrow (show the warning).
+    //   1. Today's instance is still in the future and ≥2 min away → fires today.
+    //   2. Today's instance is in the future but <2 min away → DeviceActivity
+    //      needs a small lead time, so it slips to tomorrow (show the warning).
     //   3. Today's instance is already past → next occurrence is tomorrow
     //      naturally (no warning, no urgency).
-    if (minutesUntilToday >= 20) {
+    if (minutesUntilToday >= 2) {
       Toast.show({
         type: "success",
         text1: t("profile.scheduleSaved"),

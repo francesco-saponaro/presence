@@ -26,7 +26,11 @@ import {
   scheduleWarmupNotification,
 } from "./notifications";
 import { markThemeUsedRemote } from "./contactsSync";
-import { newlyEarnedMilestones, resolveActiveChallenge } from "./blockChallenge";
+import {
+  hydrateActiveChallengeFromServer,
+  newlyEarnedMilestones,
+  resolveActiveChallenge,
+} from "./blockChallenge";
 import { fireAchievementNotification } from "./notifications";
 
 // Throttle the "Screen Time revoked" alert to once per app session.
@@ -375,6 +379,23 @@ export async function syncPendingConnections(): Promise<void> {
       challenge_word: conn.challengeWord ?? null,
     });
     if (!error) markConnectionSynced(conn.timestamp);
+
+    // Heal offline-resolve: if this verify was tied to a specific challenge
+    // (contactId + challengeWord), make sure the matching block_challenges row
+    // is marked resolved on the server. The synchronous `resolveActiveChallenge`
+    // call in `onConnectionVerified` fires the same update, but that write can
+    // silently drop when the device was offline at verify time. Without this
+    // catch-up, `hydrateActiveChallengeFromServer` on next launch would hydrate
+    // the still-active-on-server row and appear to "un-resolve" the challenge.
+    if (!error && conn.contactId && conn.challengeWord) {
+      await supabase
+        .from("block_challenges")
+        .update({ resolved_at: conn.timestamp })
+        .eq("user_id", session.user.id)
+        .eq("contact_id", conn.contactId)
+        .eq("challenge_word", conn.challengeWord)
+        .is("resolved_at", null);
+    }
   }
 
   // Mirror lifetime count + streak + achievements into the profiles table
@@ -406,21 +427,49 @@ export async function syncPendingConnections(): Promise<void> {
 export function startShieldEngine(): () => void {
   _screenTimeAlertShown = false; // reset per app session
 
-  // Run the first schedule/auth check only once the routine store has hydrated
-  // from AsyncStorage. On a cold start — which is exactly what happens after the
-  // user toggles Presence's Screen Time off in iOS Settings, since iOS kills the
-  // app — the persisted routine is NOT readable synchronously. A premature check
-  // sees blockTimeUtc=null, bails at the routineReady guard, and never reaches
-  // the Screen Time auth check, so the revoked-permission alert never fires.
+  // Cold-start sequence, run AFTER routine store hydration finishes so
+  // `blockTimeUtc` etc. are readable (see also gotcha #19 hydration race).
+  //
+  // Ordering rules:
+  //   • Shield activation depends ONLY on local state (routine + shield stores)
+  //     and must NEVER be gated on network. An offline user must still see
+  //     their shield come up on cold start.
+  //   • Challenge hydrate is best-effort — it lifts a valid server-side row
+  //     into local state so we don't overwrite it in `assignChallengeIfNeeded`.
+  //     Bounded by a 3s race so a slow/offline network can't block anything.
+  //   • Sync is fire-and-forget (its offline-resolve heal for
+  //     `block_challenges.resolved_at` runs opportunistically; AppState
+  //     foreground events will re-run it if this cold-start pass failed).
+  //
+  // Race note: hydrate runs BEFORE `checkAndUpdateShield` so that if the user
+  // was already blocked, `activeChallenge` is populated by the time Home
+  // renders and its on-demand `assignChallengeIfNeeded` useEffect no-ops
+  // instead of picking a fresh (unwanted) word.
+  async function coldStartSequence() {
+    // Fire-and-forget sync — no await; must not block shield activation.
+    syncPendingConnections().catch((e) => console.warn("[shieldEngine] sync:", e));
+
+    // Bounded hydrate so a hung network doesn't delay the shield.
+    try {
+      await Promise.race([
+        hydrateActiveChallengeFromServer(),
+        new Promise<void>((resolve) => setTimeout(resolve, 3000)),
+      ]);
+    } catch (e) {
+      console.warn("[shieldEngine] hydrate:", e);
+    }
+
+    try { await checkAndUpdateShield(); } catch (e) { console.warn("[shieldEngine] check:", e); }
+  }
+
   let removeHydrationListener = () => {};
   if (useRoutineStore.persist.hasHydrated()) {
-    checkAndUpdateShield().catch(console.warn);
+    coldStartSequence();
   } else {
     removeHydrationListener = useRoutineStore.persist.onFinishHydration(() => {
-      checkAndUpdateShield().catch(console.warn);
+      coldStartSequence();
     });
   }
-  syncPendingConnections().catch(console.warn);
 
   // AppState: foreground re-check (anti-cheat)
   const handleAppState = (next: AppStateStatus) => {

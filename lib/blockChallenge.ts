@@ -168,12 +168,13 @@ export async function assignChallengeIfNeeded(opts?: {
   // running session, DB row is for cross-device and analytics history).
   void (async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      await resolveAllActiveOnServer(user.id);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const userId = session.user.id;
+      await resolveAllActiveOnServer(userId);
       await supabase.from("block_challenges").insert({
         id: challenge.id,
-        user_id: user.id,
+        user_id: userId,
         contact_id: challenge.contactId,
         theme_id: challenge.themeId,
         challenge_word: challenge.word,
@@ -207,13 +208,13 @@ export function resolveActiveChallenge(): {
 
   void (async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
       await supabase
         .from("block_challenges")
         .update({ resolved_at: new Date().toISOString() })
         .eq("id", snapshot.id)
-        .eq("user_id", user.id)
+        .eq("user_id", session.user.id)
         .is("resolved_at", null);
     } catch {
       // Best-effort.
@@ -225,6 +226,92 @@ export function resolveActiveChallenge(): {
     themeId: snapshot.themeId,
     word: snapshot.word,
   };
+}
+
+/**
+ * Read the current unresolved row from `block_challenges` and mirror it into
+ * the local `useShieldStore.activeChallenge`. Called on cold start (from
+ * `startShieldEngine`) and inside `scheduleWarmupNotification` — anywhere we
+ * might otherwise stomp a valid server-side challenge with a locally-picked
+ * new one.
+ *
+ * Behaviour:
+ *   • Server has an active row → mirror it (overriding any stale local one).
+ *     The contact name / theme text / keywords come from the FK joins so we
+ *     don't have to depend on `useContactsStore` being hydrated yet.
+ *   • Server has NO active row → clear any stale local `activeChallenge` so
+ *     the next `assignChallengeIfNeeded` can freely pick a new one. This
+ *     covers the case where the last cycle was resolved by another device.
+ *   • Any network / RLS / not-signed-in error → best-effort no-op. Local
+ *     state is preserved so offline usage keeps working.
+ */
+export async function hydrateActiveChallengeFromServer(): Promise<void> {
+  try {
+    // getSession is local-first (reads AsyncStorage). getUser would network
+    // round-trip against the auth server on every call — hangs the cold-start
+    // sequence when the device is offline.
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const userId = session.user.id;
+
+    // FK-embed contact + theme via table name (PostgREST resolves the FK
+    // automatically — block_challenges has one FK to each). Alias with the
+    // singular form for readability.
+    const { data, error } = await supabase
+      .from("block_challenges")
+      .select(
+        "id, contact_id, theme_id, challenge_word, assigned_at, " +
+        "contact:contacts(name), " +
+        "theme:contact_themes(theme_text, keywords)",
+      )
+      .eq("user_id", userId)
+      .is("resolved_at", null)
+      .order("assigned_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) return; // network / RLS error → keep local state
+
+    const { activeChallenge, setActiveChallenge } = useShieldStore.getState();
+
+    if (!data) {
+      // Server says nothing is active. Clear any stale local one so the next
+      // assign is free to pick fresh.
+      if (activeChallenge) setActiveChallenge(null);
+      return;
+    }
+
+    // PostgREST embeds a to-one relationship as an object; some client versions
+    // wrap it in a single-element array. Normalise both shapes.
+    type JoinedContact = { name?: string | null } | null;
+    type JoinedTheme = { theme_text?: string | null; keywords?: string[] | null } | null;
+    interface Row {
+      id: string;
+      contact_id: string;
+      theme_id: string | null;
+      challenge_word: string;
+      assigned_at: string;
+      contact: JoinedContact | JoinedContact[];
+      theme: JoinedTheme | JoinedTheme[];
+    }
+    const row = data as unknown as Row;
+    const contact = Array.isArray(row.contact) ? row.contact[0] : row.contact;
+    const theme = Array.isArray(row.theme) ? row.theme[0] : row.theme;
+    const keywords = Array.isArray(theme?.keywords) ? theme!.keywords! : [];
+
+    setActiveChallenge({
+      id: row.id,
+      contactId: row.contact_id,
+      contactName: contact?.name ?? "",
+      themeId: row.theme_id,
+      themeText: theme?.theme_text ?? null,
+      word: row.challenge_word,
+      assignedAt: row.assigned_at,
+      themesStale: keywords.length === 0,
+    });
+  } catch {
+    // Best-effort — keep local state on any unexpected error.
+  }
 }
 
 /**

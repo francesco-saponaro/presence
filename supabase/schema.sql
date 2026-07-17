@@ -23,10 +23,12 @@ create table if not exists public.profiles (
 
 alter table public.profiles enable row level security;
 
+drop policy if exists "profiles: owner read" on public.profiles;
 create policy "profiles: owner read"
   on public.profiles for select
   using (auth.uid() = id);
 
+drop policy if exists "profiles: owner update" on public.profiles;
 create policy "profiles: owner update"
   on public.profiles for update
   using (auth.uid() = id);
@@ -48,6 +50,7 @@ create table if not exists public.routines (
 
 alter table public.routines enable row level security;
 
+drop policy if exists "routines: owner all" on public.routines;
 create policy "routines: owner all"
   on public.routines for all
   using (auth.uid() = user_id);
@@ -74,6 +77,7 @@ create index if not exists contacts_user_id_idx on public.contacts(user_id);
 
 alter table public.contacts enable row level security;
 
+drop policy if exists "contacts: owner all" on public.contacts;
 create policy "contacts: owner all"
   on public.contacts for all
   using (auth.uid() = user_id);
@@ -106,6 +110,7 @@ create index if not exists contact_themes_user_unused_idx
 
 alter table public.contact_themes enable row level security;
 
+drop policy if exists "contact_themes: owner all" on public.contact_themes;
 create policy "contact_themes: owner all"
   on public.contact_themes for all
   using (auth.uid() = user_id);
@@ -133,6 +138,7 @@ create index if not exists connection_proofs_user_id_idx
 
 alter table public.connection_proofs enable row level security;
 
+drop policy if exists "proofs: owner all" on public.connection_proofs;
 create policy "proofs: owner all"
   on public.connection_proofs for all
   using (auth.uid() = user_id);
@@ -165,9 +171,21 @@ create unique index if not exists block_challenges_active_uniq
 
 alter table public.block_challenges enable row level security;
 
+drop policy if exists "block_challenges: owner all" on public.block_challenges;
 create policy "block_challenges: owner all"
   on public.block_challenges for all
   using (auth.uid() = user_id);
+
+-- =============================================================================
+-- Phase 9 migrations (idempotent — apply to existing DBs where the top-level
+-- create-table-if-not-exists statements above are no-ops).
+-- =============================================================================
+
+alter table public.profiles
+  add column if not exists achievements_earned integer[] not null default '{}';
+
+alter table public.connection_proofs
+  add column if not exists challenge_word text;
 
 -- 7. Auto-create profile row when a user signs up
 

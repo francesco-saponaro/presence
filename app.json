@@ -2,13 +2,13 @@
   "expo": {
     "name": "Presence",
     "slug": "presence",
-    "version": "1.0.7",
+    "version": "1.0.8",
     "orientation": "portrait",
     "icon": "./assets/images/logo-android.png",
     "scheme": "presence",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "buildNumber": "26",
+      "buildNumber": "27",
       "appleTeamId": "86BLA5VR2L",
       "supportsTablet": false,
       "bundleIdentifier": "com.franciccio.presence",

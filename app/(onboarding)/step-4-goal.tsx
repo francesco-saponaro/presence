@@ -73,10 +73,10 @@ export default function Step4Goal() {
     const timeStr = formatTime(time);
 
     // Same three-case logic as block-time.tsx:
-    //   ≥20 min in the future today → today
-    //   <20 min in the future today → slips to tomorrow (warning)
-    //   already past today          → natural next-day occurrence (no warning)
-    if (minutesUntilToday >= 20) {
+    //   ≥2 min in the future today → today
+    //   <2 min in the future today → slips to tomorrow (warning)
+    //   already past today         → natural next-day occurrence (no warning)
+    if (minutesUntilToday >= 2) {
       Toast.show({
         type: "success",
         text1: t("blockTime.startsToday", { time: timeStr }),

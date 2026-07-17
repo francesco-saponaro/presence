@@ -100,15 +100,21 @@ export async function scheduleWarmupNotification(
   const warmupHour = Math.floor(warmupMinutes / 60);
   const warmupMinute = warmupMinutes % 60;
 
-  // Assign/refresh the block challenge so the notification body names the same
-  // (contact + word) the Home screen will show when the shield goes up. This
-  // is one of the five re-bake triggers (see CLAUDE.md §7 notifications).
+  // Ensure the notification body names the same (contact + word) the Home
+  // screen will show. Two steps, in order:
+  //   1. Hydrate from server — protects against the reinstall / cross-device
+  //      case where the local persist is empty but the server has an active
+  //      row that we should honour rather than overwrite.
+  //   2. Assign only if still needed — idempotent (no force). If a challenge
+  //      is already set (locally or just hydrated), this is a no-op. If the
+  //      previous cycle was just resolved (via onConnectionVerified), a fresh
+  //      one is assigned here for the next block.
   // Lazy require to break the notifications → blockChallenge → contactsSync →
   // notifications import cycle (contactsSync calls scheduleWarmup on regen).
   try {
-    const { assignChallengeIfNeeded } = require("@/lib/blockChallenge") as
-      typeof import("@/lib/blockChallenge");
-    await assignChallengeIfNeeded({ force: true });
+    const bc = require("@/lib/blockChallenge") as typeof import("@/lib/blockChallenge");
+    await bc.hydrateActiveChallengeFromServer();
+    await bc.assignChallengeIfNeeded();
   } catch {
     // Best-effort. Fallback body branches handle no-challenge state.
   }

@@ -76,17 +76,17 @@
     "step4how": {
       "label": "Step 4 of 8",
       "title": "Here's how Presence works.",
-      "subtitle": "Four steps. Real connection. Every day.",
+      "subtitle": "A small challenge every time. A real connection every day.",
       "step1Title": "Lock",
       "step1Desc": "Your chosen apps lock automatically at your set time.",
-      "step2Title": "Connect",
-      "step2Desc": "Message a trusted contact.",
-      "step2DescHighlight": "We write personalised prompts for each person. You always know what to say.",
-      "step3Title": "Screenshot",
-      "step3Desc": "Capture and upload the conversation — both the message and the date must be clearly visible.",
-      "step4Title": "Unlock",
-      "step4Desc": "Your screenshot is verified in seconds. Your apps come back, and you go back to your day — lighter.",
-      "hint": "Tip: make sure the screenshot is well-lit and easy to read."
+      "step2Title": "Get your challenge",
+      "step2Desc": "We pick a trusted contact and one specific word — like \"proud\" or \"berlin\" — you need to use in a text to them.",
+      "step2DescHighlight": "We also write personalised prompts for each person, so you always know what to say.",
+      "step3Title": "Text them",
+      "step3Desc": "Send a genuine message that includes the challenge word, then screenshot the conversation — message and date must be visible.",
+      "step4Title": "Unlock + earn",
+      "step4Desc": "Verified in seconds. Your apps come back, streaks build, and every few connections you unlock a new milestone.",
+      "hint": "Every block cycle picks a fresh word — no more re-uploading the same screenshot."
     },
     "step4": {
       "label": "Step 5 of 8",
@@ -266,6 +266,8 @@
     "contactsPageTitle": "Trusted Contacts",
     "contactsPageIntro": "These are the people you reach out to when your apps lock. Tap any to add details.",
     "contactsPageEmpty": "No contacts yet. Add someone who keeps you grounded.",
+    "contactCardThemesSummary": "{{done}} of {{total}} prompts covered",
+    "contactCardStaleChip": "Stale — refresh",
     "contactEditor": {
       "title": "Edit details",
       "subtitle": "Changing any answer refreshes the prompts.",
@@ -310,7 +312,7 @@
   "blockTime": {
     "startsToday": "Shield starts today at {{time}}.",
     "startsTomorrow": "Shield starts tomorrow at {{time}}.",
-    "startsTomorrowSoon": "Heads up — less than 20 minutes away. Your shield will start tomorrow at {{time}}.",
+    "startsTomorrowSoon": "Heads up — less than 2 minutes away. Your shield will start tomorrow at {{time}}.",
     "screenTimeOffTitle": "Screen Time is off",
     "screenTimeOffBody": "Tap here to re-enable it in Settings so Presence can lock your apps at the scheduled time.",
     "screenTimeNearTitle": "Screen Time needs to be on",

@@ -76,17 +76,17 @@
     "step4how": {
       "label": "Paso 4 de 8",
       "title": "Así es como funciona Presence.",
-      "subtitle": "Cuatro pasos. Conexión real. Cada día.",
+      "subtitle": "Un pequeño reto cada vez. Una conexión real cada día.",
       "step1Title": "Bloquear",
       "step1Desc": "Las apps elegidas se bloquean automáticamente a tu hora configurada.",
-      "step2Title": "Conectar",
-      "step2Desc": "Escríbele a un contacto de confianza.",
-      "step2DescHighlight": "Escribimos ideas personalizadas para cada persona. Siempre sabes qué decir.",
-      "step3Title": "Captura",
-      "step3Desc": "Captura y sube la conversación — el mensaje y la fecha deben estar claramente visibles.",
-      "step4Title": "Desbloquear",
-      "step4Desc": "Tu captura se verifica en segundos. Tus apps vuelven y tú vuelves a tu día — más ligero.",
-      "hint": "Consejo: asegúrate de que la captura sea clara y fácil de leer."
+      "step2Title": "Recibe tu reto",
+      "step2Desc": "Elegimos un contacto de confianza y una palabra concreta — como \"orgullo\" o \"madrid\" — que debes usar en un mensaje para esa persona.",
+      "step2DescHighlight": "También escribimos ideas personalizadas para cada persona, así siempre sabes qué decir.",
+      "step3Title": "Escríbele",
+      "step3Desc": "Envía un mensaje genuino que incluya la palabra del reto, luego captura la conversación — el mensaje y la fecha deben estar visibles.",
+      "step4Title": "Desbloquea y avanza",
+      "step4Desc": "Verificado en segundos. Tus apps vuelven, tu racha crece y cada pocas conexiones desbloqueas un nuevo logro.",
+      "hint": "Cada ciclo de bloqueo elige una palabra nueva — se acabó reutilizar la misma captura."
     },
     "step4": {
       "label": "Paso 5 de 8",
@@ -266,6 +266,8 @@
     "contactsPageTitle": "Contactos de confianza",
     "contactsPageIntro": "Estas son las personas a las que escribes cuando tus apps se bloquean. Toca cualquiera para añadir detalles.",
     "contactsPageEmpty": "Aún no hay contactos. Añade a alguien que te mantenga con los pies en la tierra.",
+    "contactCardThemesSummary": "{{done}} de {{total}} ideas cubiertas",
+    "contactCardStaleChip": "Repetida — actualiza",
     "contactEditor": {
       "title": "Editar detalles",
       "subtitle": "Cambiar cualquier respuesta actualiza las ideas.",
@@ -310,7 +312,7 @@
   "blockTime": {
     "startsToday": "El escudo comienza hoy a las {{time}}.",
     "startsTomorrow": "El escudo comienza mañana a las {{time}}.",
-    "startsTomorrowSoon": "Atención — menos de 20 minutos. Tu escudo comenzará mañana a las {{time}}.",
+    "startsTomorrowSoon": "Atención — menos de 2 minutos. Tu escudo comenzará mañana a las {{time}}.",
     "screenTimeOffTitle": "Tiempo de pantalla está desactivado",
     "screenTimeOffBody": "Toca aquí para reactivarlo en Ajustes y que Presence pueda bloquear tus apps.",
     "screenTimeNearTitle": "Tiempo de pantalla debe estar activado",
